@@ -1,7 +1,7 @@
 ---
 name: aiygin-fe-bff-issue-planning
-description: FE/BFF の開発計画を GitHub Issue 形式へ変換し、AIYGIN/business を親 Issue、AIYGIN/bff と AIYGIN/fe を子 Issue として自動登録するワークフロー。
-version: 1.0.0
+description: FE/BFF の開発計画を GitHub Issue 形式へ変換し、AIYGIN/business の親 Issue だけを作成したうえで、AIYGIN/fe と AIYGIN/bff の子 Issue 作成は各リポジトリ内のテンプレート・スクリプト・skill へ委譲するワークフロー。
+version: 1.1.0
 author: Hermes Agent
 license: MIT
 platforms: [macos, linux, windows]
@@ -11,11 +11,15 @@ metadata:
     related_skills: [github-issues, github-pr-summarizer]
 ---
 
-# AIYGIN FE/BFF 開発計画の GitHub Issue 化
+# AIYGIN FE/BFF 開発計画の business Issue 化と子 Issue 作成委譲
 
 ## 概要
 
-この skill は、FE/BFF をまたぐ開発計画・仕様・RFC・ユーザーストーリーを、AIYGIN の GitHub Issue 群へ変換して登録するための手順である。
+この skill は、FE/BFF をまたぐ開発計画・仕様・RFC・ユーザーストーリーを、まず `AIYGIN/business` の GitHub Issue として整理・登録するための手順である。
+
+重要: この skill が直接発行する Issue は `AIYGIN/business` の親 Issue だけである。
+
+`AIYGIN/fe` と `AIYGIN/bff` の子 Issue は、この skill から直接 `gh issue create --repo AIYGIN/fe` や `gh issue create --repo AIYGIN/bff` を実行して作成してはいけない。FE/BFF 各リポジトリには Issue 作成用のテンプレート、スクリプト、skill ファイルがあるため、子 Issue 作成は必ずそれらへ委譲する。
 
 対象リポジトリは以下の 3 つ。
 
@@ -25,13 +29,12 @@ metadata:
 
 必須の流れは以下。
 
-1. まず `AIYGIN/business` に親 Issue を作成、または既存の親 Issue を特定する。
+1. `AIYGIN/business` に親 Issue を作成、または既存の親 Issue を特定する。
 2. 親 Issue には、BE、BFF、機能要件、UI要件、セキュリティ対策、リスク、リスク対策を必ず含める。
-3. 親 Issue の内容を元に、`AIYGIN/bff` と `AIYGIN/fe` に子 Issue を作成する。
-4. 子 Issue から親 Issue へリンクする。
-5. 親 Issue へ BFF / FE の子 Issue URL をコメント、または本文更新で追記する。
-
-`AIYGIN/business` の親 Issue を作成・特定しないまま、FE/BFF の実装 Issue を作成してはいけない。
+3. 親 Issue の URL と要件整理結果を、FE/BFF 子 Issue 作成用の委譲入力としてまとめる。
+4. `AIYGIN/fe` の子 Issue 作成は、`AIYGIN/fe` リポジトリ内のテンプレート・スクリプト・skill に委譲する。
+5. `AIYGIN/bff` の子 Issue 作成は、`AIYGIN/bff` リポジトリ内のテンプレート・スクリプト・skill に委譲する。
+6. 子 Issue 作成が完了したら、作成された FE/BFF Issue URL を `AIYGIN/business` の親 Issue にコメント、または本文更新で追記する。
 
 ## 使用する場面
 
@@ -48,6 +51,14 @@ metadata:
 - 単一リポジトリだけで完結する軽微な bug report。
 - PR 作成、コード実装、レビュー依頼そのもの。
 - GitHub 認証や gh CLI セットアップのトラブルシュート。必要なら `github-auth` / `github-issues` を使う。
+
+## 絶対ルール
+
+- この skill で直接作成してよい Issue は `AIYGIN/business` だけ。
+- `AIYGIN/fe` と `AIYGIN/bff` の Issue 作成は、各リポジトリ内の Issue 作成用テンプレート・スクリプト・skill に委譲する。
+- FE/BFF 子 Issue の本文テンプレートをこの skill 内で独自生成して、そのまま `gh issue create` してはいけない。
+- FE/BFF 子 Issue 作成に必要な情報は、business Issue URL と整理済み要件を委譲入力として渡す。
+- 子 Issue 作成後は、FE/BFF 側の作成結果 URL を business Issue に戻す。
 
 ## 対象リポジトリ
 
@@ -86,8 +97,8 @@ Issue 作成前に、以下を抽出・整理する。
 
 ただし、以下のように Issue 作成対象や登録可否が変わる曖昧さがある場合は、ユーザーに確認する。
 
-- FE/BFF のどちらか一方だけでよい可能性がある。
 - business の親 Issue を新規作成するか、既存 Issue を使うか判断できない。
+- FE/BFF 子 Issue の作成委譲先がローカルに存在せず、取得方法も分からない。
 - ユーザーが「登録前に内容確認したい」と明示している。
 
 ## 事前確認
@@ -103,18 +114,16 @@ gh repo view AIYGIN/bff >/dev/null
 gh repo view AIYGIN/fe >/dev/null
 ```
 
-重複を避けるため、関連しそうな既存 Issue を検索する。
+重複を避けるため、まず `AIYGIN/business` の既存 Issue を検索する。
 
 ```bash
 QUERY="<機能名または主要キーワード>"
-gh issue list --repo AIYGIN/business --state open --search "$QUERY" --limit 10
-gh issue list --repo AIYGIN/bff --state open --search "$QUERY" --limit 10
-gh issue list --repo AIYGIN/fe --state open --search "$QUERY" --limit 10
+gh issue list --repo AIYGIN/business --state open --search "$QUERY" --limit 20
 ```
 
 該当する business Issue がすでにある場合は、重複作成せず親 Issue として再利用する。
 
-該当する BFF / FE Issue がすでにある場合は、足りない子 Issue だけ作成する。既存子 Issue の内容が不足している場合は、新規 Issue を重複作成せず、既存 Issue へ不足事項をコメントする。
+FE/BFF 側の重複確認は、この skill で直接 `AIYGIN/fe` / `AIYGIN/bff` の Issue 作成を行うためではなく、委譲先が必要とする入力として扱う。最終的な重複判定と子 Issue 作成は、各リポジトリのテンプレート・スクリプト・skill の責務とする。
 
 ## business 親 Issue の形式
 
@@ -171,9 +180,24 @@ gh issue list --repo AIYGIN/fe --state open --search "$QUERY" --limit 10
 - [ ] <ユーザー観点の完了条件>
 - [ ] <API / UI / セキュリティ観点の完了条件>
 
-## 実装 Issue
-- BFF: 作成後に追記
-- FE: 作成後に追記
+## FE/BFF 子 Issue 作成
+- FE: `AIYGIN/fe` リポジトリ内の Issue 作成テンプレート・スクリプト・skill に委譲する。作成後に URL を追記する。
+- BFF: `AIYGIN/bff` リポジトリ内の Issue 作成テンプレート・スクリプト・skill に委譲する。作成後に URL を追記する。
+
+## 委譲用入力
+### FE 向け
+- 親 Issue: <business issue URL>
+- UI要件: <要約>
+- 機能要件: <要約>
+- API / 契約影響: <要約>
+- セキュリティ・UX 注意点: <要約>
+
+### BFF 向け
+- 親 Issue: <business issue URL>
+- BFF要件: <要約>
+- API / OpenAPI 対応: <要約>
+- BE 連携: <要約>
+- セキュリティ注意点: <要約>
 
 ## 未決事項
 - [ ] <要確認事項。なければ「なし」>
@@ -185,112 +209,13 @@ gh issue list --repo AIYGIN/fe --state open --search "$QUERY" --limit 10
 [Feature] <機能名> の開発計画
 ```
 
-## BFF 子 Issue の形式
-
-business 親 Issue の作成・特定後、`AIYGIN/bff` に作成する。
-
-```markdown
-## 親 Issue
-- Business: <business issue URL>
-
-## 概要
-<この BFF issue で実装・調査する範囲>
-
-## 要件
-- [ ] <BFF に必要な要件>
-- [ ] <OpenAPI / DTO / Controller / Service / 認可 / エラー仕様など>
-
-## API / OpenAPI 対応
-- [ ] 既存 OpenAPI 契約で要件を満たせるか確認する
-- [ ] 不足がある場合は契約変更内容を明記する
-- [ ] Controller / DTO / docs decorator を更新する
-- [ ] frontend の Orval 生成に必要な契約を提供する
-
-## セキュリティ
-- [ ] 認証・認可の境界を確認する
-- [ ] 入力値検証とエラー応答を定義する
-- [ ] 機密情報をレスポンス・ログへ出さない
-
-## テスト観点
-- [ ] 正常系
-- [ ] 異常系
-- [ ] 認可エラー
-- [ ] バリデーションエラー
-- [ ] OpenAPI / DTO の整合性
-
-## 受け入れ条件
-- [ ] <BFF 完了条件>
-
-## FE 連携メモ
-- <FE 側が参照すべき endpoint / schema / mock / 注意点>
-```
-
-推奨タイトル。
-
-```text
-[BFF] <機能名> の API / 契約対応
-```
-
-## FE 子 Issue の形式
-
-business 親 Issue の作成・特定後、`AIYGIN/fe` に作成する。
-
-```markdown
-## 親 Issue
-- Business: <business issue URL>
-
-## 概要
-<この FE issue で実装・調査する範囲>
-
-## 要件
-- [ ] <画面・導線・状態・表示・入力・バリデーションなど>
-
-## UI要件
-- [ ] <画面構成>
-- [ ] <操作導線>
-- [ ] <ローディング / 空状態 / エラー状態>
-- [ ] <アクセシビリティ・レスポンシブなど>
-
-## API 連携
-- [ ] Business / BFF issue の契約内容を確認する
-- [ ] 既存 API で要件を満たせるか確認する
-- [ ] 必要に応じて Orval 生成 API client / mock を更新する
-- [ ] 生成物は手動編集しない
-
-## セキュリティ・UX
-- [ ] 認可されていない操作を UI 上で適切に扱う
-- [ ] 入力値・表示値の扱いを確認する
-- [ ] エラー時に機密情報や内部事情を露出しない
-
-## テスト観点
-- [ ] ユーザー操作の正常系
-- [ ] 入力バリデーション
-- [ ] API 成功 / 失敗
-- [ ] 空状態 / ローディング / エラー状態
-- [ ] 権限差分がある場合の表示制御
-
-## 受け入れ条件
-- [ ] <FE 完了条件>
-
-## BFF 連携メモ
-- <依存する BFF issue URL、endpoint、schema、mock、未決事項>
-```
-
-推奨タイトル。
-
-```text
-[FE] <機能名> の画面 / UI 対応
-```
-
-## 自動登録手順
+## business Issue の自動登録手順
 
 複数行の Issue 本文は一時ファイルに書き出す。長い Markdown を shell command に直接埋め込まない。
 
 ```bash
 mkdir -p /tmp/aiygin-issues
 BUSINESS_BODY="/tmp/aiygin-issues/business.md"
-BFF_BODY="/tmp/aiygin-issues/bff.md"
-FE_BODY="/tmp/aiygin-issues/fe.md"
 ```
 
 1. business 親 Issue の本文を `$BUSINESS_BODY` に書く。
@@ -305,64 +230,103 @@ BUSINESS_URL=$(gh issue create \
 echo "$BUSINESS_URL"
 ```
 
-3. business Issue URL を含めて BFF Issue 本文を `$BFF_BODY` に書き、BFF Issue を作成する。
+この手順で作成するのは `AIYGIN/business` の Issue だけである。
 
-```bash
-BFF_URL=$(gh issue create \
-  --repo AIYGIN/bff \
-  --title "[BFF] <機能名> の API / 契約対応" \
-  --body-file "$BFF_BODY")
+## FE/BFF 子 Issue 作成への委譲
 
-echo "$BFF_URL"
+business Issue を作成・特定したら、FE/BFF 子 Issue 作成は各リポジトリに委譲する。
+
+委譲時には、少なくとも以下を渡す。
+
+```text
+親 business Issue: <business issue URL>
+機能名: <機能名>
+概要: <概要>
+機能要件: <機能要件>
+UI要件: <UI要件>
+BE要件: <BE要件>
+BFF要件: <BFF要件>
+API / 契約影響: <API 契約影響>
+セキュリティ対策: <セキュリティ対策>
+リスク: <リスク>
+リスク対策: <リスク対策>
+受け入れ条件: <受け入れ条件>
+未決事項: <未決事項>
 ```
 
-4. business Issue URL を含めて FE Issue 本文を `$FE_BODY` に書き、FE Issue を作成する。
+### FE への委譲
+
+`AIYGIN/fe` リポジトリ内にある Issue 作成用テンプレート・スクリプト・skill を使う。
+
+この skill では FE Issue 本文を独自に確定しない。FE 側のテンプレートとスクリプトが期待する形式に合わせて、business Issue URL と要件整理結果を渡す。
+
+FE 側へ渡す観点の例。
+
+- 親 business Issue URL
+- UI要件
+- 画面・導線・状態・表示・入力・バリデーション
+- API / BFF 契約への依存
+- セキュリティ・UX 注意点
+- 受け入れ条件
+- 未決事項
+
+### BFF への委譲
+
+`AIYGIN/bff` リポジトリ内にある Issue 作成用テンプレート・スクリプト・skill を使う。
+
+この skill では BFF Issue 本文を独自に確定しない。BFF 側のテンプレートとスクリプトが期待する形式に合わせて、business Issue URL と要件整理結果を渡す。
+
+BFF 側へ渡す観点の例。
+
+- 親 business Issue URL
+- BFF要件
+- API / OpenAPI / DTO / Controller / docs decorator への影響
+- BE 連携、DB、外部連携、ドメインロジック
+- 認証・認可、入力値検証、エラー応答
+- FE 連携に必要な契約・mock・注意点
+- 受け入れ条件
+- 未決事項
+
+## 子 Issue 作成結果の business Issue への反映
+
+FE/BFF 側の委譲が完了し、子 Issue URL が得られたら、business Issue にコメントする。
 
 ```bash
-FE_URL=$(gh issue create \
-  --repo AIYGIN/fe \
-  --title "[FE] <機能名> の画面 / UI 対応" \
-  --body-file "$FE_BODY")
+gh issue comment "$BUSINESS_URL" --body "FE/BFF 子 Issue 作成結果です。
 
-echo "$FE_URL"
+- FE: <FE issue URL または 未作成理由>
+- BFF: <BFF issue URL または 未作成理由>"
 ```
 
-5. business 親 Issue に子 Issue の URL をコメントする。
+子 Issue 作成が未完了の場合は、成功したように報告してはいけない。以下のように状態を明記する。
 
-```bash
-gh issue comment "$BUSINESS_URL" --body "実装 Issue を作成しました。
-
-- BFF: $BFF_URL
-- FE: $FE_URL"
-```
-
-6. 必要に応じて子 Issue 同士にも相互リンクをコメントする。
-
-```bash
-gh issue comment "$BFF_URL" --body "関連 FE Issue: $FE_URL"
-gh issue comment "$FE_URL" --body "関連 BFF Issue: $BFF_URL"
+```text
+- FE: 委譲先スクリプト未実行 / 実行失敗 / URL 未取得
+- BFF: 委譲先スクリプト未実行 / 実行失敗 / URL 未取得
 ```
 
 ## 事前確認のみ行う場合
 
-ユーザーが明確に「自動登録して」「作成して」「Issue を立てて」と言っていない場合は、まず登録予定を提示する。
+ユーザーが明確に「自動登録して」「作成して」「Issue を立てて」と言っていない場合は、まず登録予定と委譲方針を提示する。
 
 ```text
 登録予定:
 - AIYGIN/business: [Feature] <機能名> の開発計画
-- AIYGIN/bff: [BFF] <機能名> の API / 契約対応
-- AIYGIN/fe: [FE] <機能名> の画面 / UI 対応
 
-親子関係:
-- business issue を親にして、bff / fe issue からリンクします。
-- business issue に bff / fe issue URL をコメントで追記します。
+委譲予定:
+- AIYGIN/fe: リポジトリ内の Issue 作成テンプレート・スクリプト・skill へ委譲
+- AIYGIN/bff: リポジトリ内の Issue 作成テンプレート・スクリプト・skill へ委譲
+
+注意:
+- この skill では AIYGIN/fe / AIYGIN/bff の Issue は直接作成しません。
+- business Issue URL と整理済み要件を委譲入力として渡します。
 ```
 
-ユーザーが「自動登録して」「作成して」「立てて」と明示した場合は、事前確認と重複確認を行ったうえで登録する。
+ユーザーが「自動登録して」「作成して」「立てて」と明示した場合は、事前確認と重複確認を行ったうえで business Issue を登録し、その後 FE/BFF 側へ委譲する。
 
 ## 重複 Issue の扱い
 
-Issue 作成前に、複数のキーワードで検索する。
+Issue 作成前に、複数のキーワードで `AIYGIN/business` を検索する。
 
 ```bash
 gh issue list --repo AIYGIN/business --state open --search "<機能名>" --limit 20
@@ -373,23 +337,19 @@ business 親 Issue の重複候補がある場合。
 
 - `gh issue view --repo AIYGIN/business <number>` で内容を確認する。
 - 同じ計画を扱っているなら、既存 Issue を親として使う。
-- 足りない BFF / FE 子 Issue だけ作成する。
-- 新規作成した Issue URL を親 Issue にコメントする。
+- 既存親 Issue URL を FE/BFF 委譲入力に使う。
+- 子 Issue 作成結果が得られたら、既存親 Issue にコメントする。
 
-BFF / FE 子 Issue の重複候補がある場合。
-
-- 重複 Issue は作らない。
-- 親 Issue へ既存子 Issue のリンクを追記する。
-- 既存子 Issue の内容が不足している場合は、不足要件をコメントで追記する。
+FE/BFF 子 Issue の重複確認・再利用判断は、各リポジトリの Issue 作成用テンプレート・スクリプト・skill に委譲する。この skill が独自判断で FE/BFF Issue を作成・更新してはいけない。
 
 ## label と assignee
+
+この skill で扱う label / assignee は `AIYGIN/business` の親 Issue に限る。
 
 label は存在を確認してから使う。
 
 ```bash
 gh label list --repo AIYGIN/business
-gh label list --repo AIYGIN/bff
-gh label list --repo AIYGIN/fe
 ```
 
 存在しない label は使わない。ユーザーが明示しない限り、新規 label は作成しない。
@@ -398,45 +358,49 @@ gh label list --repo AIYGIN/fe
 
 - `feature`
 - `planning`
-- `frontend`
-- `bff`
 - `security`
 - `risk`
 
-assignee は、ユーザーが指定した場合、またはリポジトリの明確な運用ルールが分かっている場合だけ設定する。推測で担当者を割り当てない。
+assignee は、ユーザーが指定した場合、または `AIYGIN/business` の明確な運用ルールが分かっている場合だけ設定する。推測で担当者を割り当てない。
+
+FE/BFF 子 Issue の label / assignee は、各リポジトリの委譲先テンプレート・スクリプト・skill の責務とする。
 
 ## 品質ルール
 
 - business Issue を横断要件の正本とする。
-- BFF / FE 子 Issue の先頭付近に business Issue URL を必ず入れる。
-- FE Issue では、BFF / OpenAPI 契約が確認される前に API 挙動を断定しない。
-- BFF Issue では、契約変更がある場合に OpenAPI / DTO / Controller / docs decorator の対応を明記する。
+- この skill で直接作成する Issue は `AIYGIN/business` のみ。
+- FE/BFF 子 Issue 作成は、それぞれ `AIYGIN/fe` / `AIYGIN/bff` 内のテンプレート・スクリプト・skill に委譲する。
+- business Issue には、FE/BFF に委譲しやすいよう `委譲用入力` を含める。
 - セキュリティ対策とリスクは、情報不足でも省略しない。`要確認` として残す。
 - 実装可能な要件と受け入れ条件は checkbox にする。
 - 詳細が不明な場合は `未確定` と書き、事実のように補完しない。
 - Issue タイトルは短く検索しやすくする。
-- FE 生成物、特に Orval 生成 API client / mock は手動編集しない前提で Issue に書く。
-- frontend 都合だけで BFF レスポンス契約を変更しない。契約変更が必要な場合は business Issue と BFF Issue に明記する。
+- FE 生成物、特に Orval 生成 API client / mock は手動編集しない前提で整理する。
+- frontend 都合だけで BFF レスポンス契約を変更しない。契約変更が必要な場合は business Issue の API / 契約影響に明記し、BFF 側委譲入力にも含める。
+- 委譲先の実行結果を確認せず、FE/BFF 子 Issue が作成済みだと報告しない。
 
 ## よくある失敗
 
-1. FE/BFF Issue を先に作ってしまう。必ず `AIYGIN/business` の親 Issue を先に作成・特定する。
+1. この skill から `AIYGIN/fe` や `AIYGIN/bff` に直接 Issue を作ってしまう。子 Issue 作成は必ず各リポジトリ内の仕組みに委譲する。
 2. business Issue からセキュリティ対策やリスク対策を省略する。このワークフローでは必須。
-3. frontend の都合だけで BFF レスポンス契約を変える前提にする。必要なら契約変更として business / BFF Issue に明記する。
-4. frontend の生成 API client を手動編集する前提にする。FE Issue ではプロジェクトのワークフローに従って再生成する旨を書く。
-5. label や assignee が存在すると決めつける。事前に確認するか、指定しない。
-6. 重複 Issue を作る。作成前に business / bff / fe を検索する。
-7. business Issue へ子 Issue URL を戻し忘れる。
-8. 情報不足を推測で埋める。`未確定` / `要確認` と書く。
+3. 委譲用入力に business Issue URL を入れ忘れる。FE/BFF 側が親子関係を追えなくなる。
+4. frontend の都合だけで BFF レスポンス契約を変える前提にする。必要なら契約変更として business Issue と BFF 委譲入力に明記する。
+5. frontend の生成 API client を手動編集する前提にする。FE 側委譲入力ではプロジェクトのワークフローに従って再生成する旨を伝える。
+6. label や assignee が存在すると決めつける。business Issue の label は事前に確認するか、指定しない。
+7. 重複 business Issue を作る。作成前に `AIYGIN/business` を検索する。
+8. FE/BFF の子 Issue URL を business Issue へ戻し忘れる。
+9. 子 Issue 作成の委譲が失敗したのに、成功したように報告する。
+10. 情報不足を推測で埋める。`未確定` / `要確認` と書く。
 
 ## 完了確認チェックリスト
 
 登録後、以下を確認する。
 
-- [ ] `AIYGIN/business` に親 Issue が存在する。
+- [ ] `AIYGIN/business` に親 Issue が存在する、または既存親 Issue を再利用している。
 - [ ] 親 Issue に BE、BFF、機能要件、UI要件、セキュリティ対策、リスク、リスク対策が含まれている。
-- [ ] `AIYGIN/bff` に BFF 子 Issue が存在する、または既存 Issue を再利用している。
-- [ ] `AIYGIN/fe` に FE 子 Issue が存在する、または既存 Issue を再利用している。
-- [ ] 各子 Issue が business Issue にリンクしている。
-- [ ] business Issue に BFF / FE 子 Issue の URL がコメントまたは本文更新で追記されている。
-- [ ] 最終応答で作成・再利用した Issue URL をユーザーに報告している。
+- [ ] 親 Issue に FE/BFF へ渡せる委譲用入力が含まれている。
+- [ ] この skill から `AIYGIN/fe` / `AIYGIN/bff` へ直接 Issue 作成していない。
+- [ ] FE 子 Issue 作成を `AIYGIN/fe` リポジトリ内のテンプレート・スクリプト・skill に委譲した、または委譲できなかった理由を明記した。
+- [ ] BFF 子 Issue 作成を `AIYGIN/bff` リポジトリ内のテンプレート・スクリプト・skill に委譲した、または委譲できなかった理由を明記した。
+- [ ] 子 Issue URL が得られた場合は、business Issue に URL をコメントまたは本文更新で追記した。
+- [ ] 最終応答で business Issue URL、FE/BFF 委譲結果、取得できた子 Issue URL をユーザーに報告している。
