@@ -29,12 +29,80 @@ metadata:
 
 必須の流れは以下。
 
-1. `AIYGIN/business` に親 Issue を作成、または既存の親 Issue を特定する。
-2. 親 Issue には、BE、BFF、機能要件、UI要件、セキュリティ対策、リスク、リスク対策を必ず含める。
-3. 親 Issue の URL と要件整理結果を、FE/BFF 子 Issue 作成用の委譲入力としてまとめる。
-4. `AIYGIN/fe` の子 Issue 作成は、`AIYGIN/fe` リポジトリ内のテンプレート・スクリプト・skill に委譲する。
-5. `AIYGIN/bff` の子 Issue 作成は、`AIYGIN/bff` リポジトリ内のテンプレート・スクリプト・skill に委譲する。
-6. 子 Issue 作成が完了したら、作成された FE/BFF Issue URL を `AIYGIN/business` の親 Issue にコメント、または本文更新で追記する。
+0. Issue 起票前に、既存の `AIYGIN/fe` / `AIYGIN/bff` ソースコードを調査する。調査、設計、Issue 発行は同じ思考で混ぜず、原則として別 skill / 別エージェント / 別フェーズに分ける。
+1. FE 調査エージェントが `AIYGIN/fe` を調査し、routing、middleware、認証導線、Orval 設定、生成 API client / mock、既存 TODO 画面、テスト構成をまとめる。
+2. BFF 調査エージェントが `AIYGIN/bff` を調査し、NestJS module/controller/service/resource/repository 構成、OpenAPI/docs、認証・Guard、DB 接続、test/e2e 構成をまとめる。
+3. 設計フェーズで、ユーザー入力と FE/BFF 調査結果を統合し、実装可能な FE/BFF 横断設計へ落とし込む。
+4. Issue 発行フェーズで、`AIYGIN/business` に親 Issue を作成、または既存の親 Issue を特定する。
+5. 親 Issue には、調査結果に基づく BE、BFF、機能要件、UI要件、セキュリティ対策、リスク、リスク対策を必ず含める。
+6. 親 Issue の URL と要件整理結果を、FE/BFF 子 Issue 作成用の委譲入力としてまとめる。
+7. `AIYGIN/fe` の子 Issue 作成は、`AIYGIN/fe` リポジトリ内のテンプレート・スクリプト・skill に委譲する。
+8. `AIYGIN/bff` の子 Issue 作成は、`AIYGIN/bff` リポジトリ内のテンプレート・スクリプト・skill に委譲する。
+9. 子 Issue 作成が完了したら、作成された FE/BFF Issue URL を `AIYGIN/business` の親 Issue にコメント、または本文更新で追記する。
+
+## フェーズ分離とエージェント分担
+
+効率と品質のため、この workflow は以下の 3 フェーズに分ける。
+
+### 1. 既存ソースコード調査フェーズ
+
+Issue 起票前に、FE/BFF の現状を実コードから確認する。ここでは Issue 本文を作成しない。
+
+- FE 調査担当:
+  - `AIYGIN/fe` の routing / middleware / login 画面 / protected route / TODO 画面の有無を確認する。
+  - BFF OpenAPI から Orval で API client / mock を自動生成している設定、script、生成物配置を確認する。
+  - 生成物を手動編集していないか、再生成手順がどこにあるかを確認する。
+  - FE test / e2e / mock の既存方針を確認する。
+- BFF 調査担当:
+  - `AIYGIN/bff` の NestJS module/controller/service/resource/repository 構成を確認する。
+  - Swagger / OpenAPI docs decorator の配置を確認する。
+  - 既存 Guard / decorator / Cookie / CORS / JWT / DB 接続 / migration 方針を確認する。
+  - Resource 層、外部 HTTP client、test / e2e / OpenAPI e2e の既存方針を確認する。
+
+調査結果には、必ず以下を含める。
+
+```text
+- 確認した repository / path
+- 現在の構成
+- 既存の規約・テンプレート・script
+- 今回の要件に対する差分
+- Issue に反映すべき制約
+- 未確認事項
+```
+
+### 2. 横断設計フェーズ
+
+設計担当は、ユーザー入力と FE/BFF 調査結果を統合する。この時点でもまだ GitHub Issue は作成しない。
+
+このフェーズは特定機能に依存しない汎用設計 skill として扱う。具体機能名を固定せず、対象機能に合わせて画面生成・導線・API・データ・権限・テストを整理する。
+
+- FE 側で実装すべき routing、page/layout、middleware、public/protected route、画面生成、UI component、状態管理、form/input、navigation、Orval 再生成、test 方針を整理する。
+- BFF 側で実装すべき endpoint、DTO、OpenAPI、Controller、Service、Resource、Repository、DB、外部連携、認可・所有者境界、test 方針を整理する。
+- FE/BFF の API 契約境界を明確にし、frontend 都合だけで BFF response を変えない。
+- Mermaid diagram など GitHub で render される表現は、GitHub Mermaid 互換の単純な syntax で書く。
+- 情報不足は `未確定` / `要確認` として残す。
+
+### 3. Issue 発行フェーズ
+
+Issue 発行担当は、設計結果をもとに `AIYGIN/business` の親 Issue だけを作成・更新する。
+
+- Issue 発行担当は、`references/business-parent-issue-template.md` をベースに親 Issue 本文を作る。これは AIYGIN/business #1 の復元後構成をもとにしたテンプレートであり、見出し欠落を防ぐための正本とする。
+- Issue 発行担当は、FE/BFF のソースコード調査を追加で始めない。必要なら調査フェーズへ差し戻す。
+- Issue 発行担当は、`AIYGIN/fe` / `AIYGIN/bff` に直接 Issue を作成しない。
+- Issue 発行担当は、作成前に重複検索、label 確認、本文 file 作成、`gh issue create` / `gh issue edit`、作成後 verification だけを担当する。
+- `gh issue edit` などで既存 Issue を更新するときは、部分更新でも本文全体を一時ファイルに保存し、更新前後の見出し一覧を比較して欠落がないことを確認する。
+- フローチャートや Mermaid block を差し替えるときは、次の `## ...` 見出し以降を消さない範囲指定にする。
+- FE/BFF 子 Issue は各 repo のテンプレート・スクリプト・skill へ委譲する。
+
+推奨する `delegate_task` 分担:
+
+```text
+1. FE 調査エージェント: AIYGIN/fe の現状調査だけを行う。
+2. BFF 調査エージェント: AIYGIN/bff の現状調査だけを行う。
+3. 親エージェント: 2つの調査結果とユーザー要件から横断設計を作る。
+4. Issue 発行 skill/エージェント: business Issue 作成・更新だけを行う。
+```
+
 
 ## 使用する場面
 
@@ -158,9 +226,6 @@ FE/BFF 側の重複確認は、この skill で直接 `AIYGIN/fe` / `AIYGIN/bff`
 ## BFF要件
 - [ ] <API、DTO、OpenAPI、認可、集約、変換、エラーハンドリングなど>
 
-## API / 契約影響
-- <既存 API で足りるか、追加・変更が必要か、OpenAPI 更新が必要か>
-
 ## セキュリティ対策
 - [ ] <認証・認可>
 - [ ] <入力検証>
@@ -191,6 +256,12 @@ FE/BFF 側の重複確認は、この skill で直接 `AIYGIN/fe` / `AIYGIN/bff`
 - 機能要件: <要約>
 - API / 契約影響: <要約>
 - セキュリティ・UX 注意点: <要約>
+
+重要: BFF API を FE から利用する計画では、FE は BFF の OpenAPI 定義を元に Orval で API client / mock を自動生成する前提を明記する。委譲用入力の API / 契約影響には、少なくとも以下を含める。
+
+- FE は BFF の OpenAPI 定義を元に Orval で API client / mock を自動生成する前提とする。
+- Orval 生成物は手動編集しない。
+- BFF の API 契約変更時は OpenAPI を更新し、FE 側で Orval 再生成を行う。
 
 ### BFF 向け
 - 親 Issue: <business issue URL>
@@ -368,9 +439,12 @@ FE/BFF 子 Issue の label / assignee は、各リポジトリの委譲先テン
 ## 品質ルール
 
 - business Issue を横断要件の正本とする。
+- Issue 本文は極力日本語で書く。Mermaid node label、補足、受け入れ条件、委譲用入力も日本語を優先し、API 名・endpoint・env・コード識別子だけ英語表記を許容する。
 - この skill で直接作成する Issue は `AIYGIN/business` のみ。
 - FE/BFF 子 Issue 作成は、それぞれ `AIYGIN/fe` / `AIYGIN/bff` 内のテンプレート・スクリプト・skill に委譲する。
 - business Issue には、FE/BFF に委譲しやすいよう `委譲用入力` を含める。
+- 認証基盤 Issue では `references/auth-planning-corrections.md` も確認し、Orval 前提、Next.js middleware + `/login` 導線、Supabase 等 managed Postgres 前提、provider 置換漏れを反映する。
+- Google `displayName` を TODO 所有者として使い、かつ Cookie から復元する設計を求められた場合は `references/auth-displayname-owner-cookie.md` を確認する。DB に users / auth_accounts を作らず、`access_token` Cookie 内 JWT の `displayName` claim から `CurrentUser.displayName` を復元し、TODO の `owner_display_name` と照合する。
 - セキュリティ対策とリスクは、情報不足でも省略しない。`要確認` として残す。
 - 実装可能な要件と受け入れ条件は checkbox にする。
 - 詳細が不明な場合は `未確定` と書き、事実のように補完しない。
