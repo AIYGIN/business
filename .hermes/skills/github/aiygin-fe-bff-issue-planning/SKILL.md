@@ -8,7 +8,7 @@ platforms: [macos, linux, windows]
 metadata:
   hermes:
     tags: [github, issues, planning, fe, bff, business, aiygin]
-    related_skills: [github-issues, github-pr-summarizer]
+    related_skills: [github-issues, github-pr-summarizer, aiygin-product-orchestrator]
 ---
 
 # AIYGIN FE/BFF 開発計画の business Issue 化と子 Issue 作成委譲
