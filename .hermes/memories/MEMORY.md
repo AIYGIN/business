@@ -1,0 +1,1 @@
+AIYGIN automation convention: when Hermes/Codex completes, blocks, or fails an AIYGIN workflow task, it should record a concise summary in the target repository's agent-memory daily log; add scratchpad items for remaining TODOs and long_term only for stable design/operation decisions.
