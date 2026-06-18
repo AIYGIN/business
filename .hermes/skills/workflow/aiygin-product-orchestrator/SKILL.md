@@ -8,7 +8,7 @@ platforms: [macos, linux]
 metadata:
   hermes:
     tags: [aiygin, orchestration, bff, fe, codex, github, issues, pull-requests]
-    related_skills: [aiygin-fe-bff-issue-planning, ai-coding-agents, github-workflows]
+    related_skills: [aiygin-fe-bff-issue-planning, aiygin-vulnerability-loop, ai-coding-agents, github-workflows]
 ---
 
 # AIYGIN Product Orchestrator
@@ -213,6 +213,20 @@ python ~/.hermes/skills/workflow/aiygin-product-orchestrator/scripts/render_prom
 4. FE 開発 PR 作成前。
 
 確認時は、タイトル、本文要約、対象 repo、実行予定の Codex phase、作成/変更される GitHub artifact を示す。
+
+## agent-memory 完了記録
+
+各 phase が完了、停止、失敗のいずれで終わっても、作業した repository の root で `agent-memory` に要約を保存する。詳細は `references/agent-memory-completion.md` を参照する。
+
+最低限、以下を `daily` に残す。
+
+- phase 名
+- business Issue URL
+- BFF / FE の Issue URL または PR URL
+- 実行した command と結果要約
+- 停止理由または remaining work
+
+未完了 TODO は `agent-memory scratchpad add` に追加する。長期的に再利用できる設計判断だけ `long_term` に保存する。
 
 ## business Issue への反映
 

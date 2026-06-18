@@ -46,6 +46,22 @@ BFF Issue と最新コメントを読み、Controller mock / Swagger/OpenAPI 契
 
 draft PR を作成し、BFF Issue に PR URL と実行ログをコメントしてください。
 
+## agent-memory 完了記録
+
+作業が完了、停止、失敗のいずれで終わっても、対象 repository root で `agent-memory` に要約を保存してください。
+
+```bash
+agent-memory write --target daily --content "<YYYY-MM-DD> <phase>: <何をしたか>; business=<business issue URL>; artifact=<Issue/PR URL or none>; validation=<実行コマンドと結果要約>; remaining=<未完了があれば要約>"
+```
+
+未完了 TODO がある場合のみ:
+
+```bash
+agent-memory scratchpad add --text "<Issue/PR URL>: <次にやること>"
+```
+
+秘密情報、token、個人情報、大量ログは保存しないでください。
+
 ## 出力
 
 ```json
