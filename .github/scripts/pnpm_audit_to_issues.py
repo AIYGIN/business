@@ -18,6 +18,7 @@ from typing import Any
 
 DEFAULT_LABELS = ["security", "pnpm-audit", "agent:todo"]
 SEVERITY_ORDER = {"critical": 4, "high": 3, "moderate": 2, "medium": 2, "low": 1, "info": 0, "unknown": 0}
+DEFAULT_INCLUDED_SEVERITIES = {"critical", "high"}
 
 
 @dataclass(frozen=True)
@@ -170,9 +171,10 @@ def findings_from_vulnerabilities(spec: ReportSpec, data: dict[str, Any]) -> lis
     return findings
 
 
-def extract_findings(spec: ReportSpec) -> list[Finding]:
+def extract_findings(spec: ReportSpec, included_severities: set[str]) -> list[Finding]:
     data = load_json(spec.path)
     findings = findings_from_advisories(spec, data) or findings_from_vulnerabilities(spec, data)
+    findings = [finding for finding in findings if finding.severity in included_severities]
     findings.sort(key=lambda f: (-SEVERITY_ORDER.get(f.severity, 0), f.package, f.title))
     return findings
 
@@ -238,25 +240,35 @@ def ensure_label(repo: str, label: str) -> None:
     run(["gh", "label", "create", label, "--repo", repo, "--color", color, "--force"], check=False)
 
 
-def get_open_audit_issues(repo: str) -> dict[str, dict[str, Any]]:
+def get_open_audit_issues(repo: str) -> dict[str, dict[str, dict[str, Any]]]:
     out = run([
         "gh", "issue", "list", "--repo", repo, "--state", "open", "--label", "pnpm-audit",
-        "--limit", "200", "--json", "number,title,url",
+        "--limit", "200", "--json", "number,title,url,body",
     ])
     items = json.loads(out or "[]")
-    return {item["title"]: item for item in items}
+    by_title = {item["title"]: item for item in items}
+    by_stable_id: dict[str, dict[str, Any]] = {}
+    for item in items:
+        body = item.get("body") or ""
+        marker = "- stable id: `"
+        if marker in body:
+            stable_id = body.split(marker, 1)[1].split("`", 1)[0].strip()
+            if stable_id:
+                by_stable_id[stable_id] = item
+    return {"by_title": by_title, "by_stable_id": by_stable_id}
 
 
 def create_or_update_issue(
     business_repo: str,
     finding: Finding,
-    existing: dict[str, dict[str, Any]],
+    existing: dict[str, dict[str, dict[str, Any]]],
     *,
     dry_run: bool = False,
 ) -> str:
     title = finding.title_for_issue
+    existing_issue = existing.get("by_stable_id", {}).get(finding.stable_id) or existing.get("by_title", {}).get(title)
     if dry_run:
-        action = "update" if title in existing else "create"
+        action = "skip-duplicate" if existing_issue else "create"
         print(json.dumps({
             "action": action,
             "repo": business_repo,
@@ -271,11 +283,9 @@ def create_or_update_issue(
     body_path = Path(f"/tmp/pnpm-audit-{finding.stable_id}.md")
     body_path.write_text(issue_body(finding), encoding="utf-8")
 
-    if title in existing:
-        issue = existing[title]
-        run(["gh", "issue", "comment", str(issue["number"]), "--repo", business_repo, "--body-file", str(body_path)])
-        print(f"updated {issue['url']}")
-        return issue["url"]
+    if existing_issue:
+        print(f"skipped duplicate {existing_issue['url']}")
+        return existing_issue["url"]
 
     args = ["gh", "issue", "create", "--repo", business_repo, "--title", title, "--body-file", str(body_path)]
     for label in finding.labels:
@@ -289,15 +299,22 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--business-repo", default="AIYGIN/business")
     parser.add_argument("--report", action="append", type=parse_report_spec, required=True)
+    parser.add_argument(
+        "--severity",
+        action="append",
+        choices=sorted(SEVERITY_ORDER),
+        help="Included severity. Repeatable. Defaults to critical and high only.",
+    )
     parser.add_argument("--dry-run", action="store_true", help="Parse reports and print planned issue operations without calling gh")
     args = parser.parse_args()
 
-    existing = {} if args.dry_run else get_open_audit_issues(args.business_repo)
+    included_severities = {normalize_severity(sev) for sev in (args.severity or DEFAULT_INCLUDED_SEVERITIES)}
+    existing = {"by_title": {}, "by_stable_id": {}} if args.dry_run else get_open_audit_issues(args.business_repo)
     total = 0
     for spec in args.report:
-        findings = extract_findings(spec)
+        findings = extract_findings(spec, included_severities)
         if not findings:
-            print(f"no vulnerabilities: {spec.key} ({spec.repo})")
+            print(f"no included vulnerabilities: {spec.key} ({spec.repo}) severities={','.join(sorted(included_severities))}")
             continue
         for finding in findings:
             create_or_update_issue(args.business_repo, finding, existing, dry_run=args.dry_run)

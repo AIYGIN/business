@@ -66,5 +66,7 @@ jobs:
         run: |
           python3 business/.github/scripts/pnpm_audit_to_issues.py \
             --business-repo AIYGIN/business \
+            --severity critical \
+            --severity high \
             --report bff=AIYGIN/bff:bff-audit.json \
             --report fe=AIYGIN/fe:fe-audit.json

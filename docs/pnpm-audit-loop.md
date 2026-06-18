@@ -10,7 +10,8 @@ GitHub Actions:
 - 毎週月曜 09:00 JST
 - `AIYGIN/bff` と `AIYGIN/fe` を checkout
 - `pnpm audit --json` を実行
-- 脆弱性がある場合は `AIYGIN/business` に Issue を作成・更新
+- severity が `critical` または `high` の脆弱性だけを `AIYGIN/business` に Issue 作成
+- 既存の open `pnpm-audit` Issue と同じ stable id / title の脆弱性は重複発行しない
 
 private repository を checkout する場合は repository secret `AIYGIN_AUDIT_TOKEN` が必要。
 
