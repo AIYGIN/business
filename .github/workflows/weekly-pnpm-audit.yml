@@ -1,0 +1,70 @@
+name: Weekly PNPM audit issues
+
+on:
+  schedule:
+    # JST Monday 09:00 = UTC Monday 00:00
+    - cron: "0 0 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  pnpm-audit-to-issues:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout business
+        uses: actions/checkout@v4
+        with:
+          path: business
+
+      - name: Checkout BFF
+        uses: actions/checkout@v4
+        with:
+          repository: AIYGIN/bff
+          path: bff
+          token: ${{ secrets.AIYGIN_AUDIT_TOKEN }}
+
+      - name: Checkout FE
+        uses: actions/checkout@v4
+        with:
+          repository: AIYGIN/fe
+          path: fe
+          token: ${{ secrets.AIYGIN_AUDIT_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: |
+            bff/pnpm-lock.yaml
+            fe/pnpm-lock.yaml
+
+      - name: Run pnpm audit for BFF
+        working-directory: bff
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm audit --json > ../bff-audit.json || true
+
+      - name: Run pnpm audit for FE
+        working-directory: fe
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm audit --json > ../fe-audit.json || true
+
+      - name: Create or update business security issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 business/.github/scripts/pnpm_audit_to_issues.py \
+            --business-repo AIYGIN/business \
+            --report bff=AIYGIN/bff:bff-audit.json \
+            --report fe=AIYGIN/fe:fe-audit.json
