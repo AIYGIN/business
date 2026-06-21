@@ -23,9 +23,25 @@ trap 'rm -f "$PROMPT_FILE"' EXIT
 python3 "$SCRIPT_DIR/render_prompt.py" --phase "$PHASE" "$@" > "$PROMPT_FILE"
 
 cd "$REPO_DIR"
+command -v headroom >/dev/null || { echo "headroom CLI が見つかりません。Hermes 経由の Codex 起動は headroom wrap 必須です" >&2; exit 1; }
 command -v codex >/dev/null || { echo "codex CLI が見つかりません" >&2; exit 1; }
 command -v gh >/dev/null || { echo "gh CLI が見つかりません" >&2; exit 1; }
+command -v agent-memory >/dev/null || { echo "agent-memory CLI が見つかりません" >&2; exit 1; }
 gh auth status >/dev/null
 
 # Codex は対話 CLI なので、Hermes から呼ぶ場合は terminal(..., pty=true) でこの script を実行する。
-codex exec --full-auto "$(<"$PROMPT_FILE")"
+# Hermes 経由の Codex 起動は必ず Headroom で wrap し、開始/終了/失敗を agent-memory に残す。
+agent-memory write --content "aiygin codex: ${PHASE} 開始。repo=${REPO_DIR} command=headroom wrap codex exec --full-auto / prompt_file=${PROMPT_FILE}"
+
+set +e
+headroom wrap codex exec --full-auto "$(<"$PROMPT_FILE")"
+STATUS=$?
+set -e
+
+if [[ $STATUS -eq 0 ]]; then
+  agent-memory write --content "aiygin codex: ${PHASE} 完了。repo=${REPO_DIR} exit=0 / next=Hermesがdiff・URL・検証結果を確認する"
+else
+  agent-memory write --content "aiygin codex: ${PHASE} 失敗。repo=${REPO_DIR} exit=${STATUS} / next=ログ確認後に再実行またはユーザー確認"
+fi
+
+exit "$STATUS"
