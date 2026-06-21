@@ -12,6 +12,31 @@ metadata:
 
 # PR人間指摘 反映ループ
 
+## agent-memory 記録ルール
+
+PR人間指摘の反映では、コメント取得・分類・修正・矛盾チェック・push の作業自体を `agent-memory` コマンドで必ず記録する。`proposal-planning-workflow` の Phase 5 として実行する場合は特に必須。
+
+```bash
+rtk agent-memory write --content "pr feedback: <owner/repo>#<PR番号> 開始。対象=<files> / comments=<件数> / branch=<branch>"
+rtk agent-memory write --content "pr feedback: <owner/repo>#<PR番号> 分類完了。対応=<件数> / 要確認=<件数> / 対応不要=<件数>"
+rtk agent-memory write --content "pr feedback: <owner/repo>#<PR番号> 反映完了。files=<paths> / commit=<sha or 未commit> / push=<済|未> / 要確認=<項目>"
+rtk agent-memory scratchpad add --text "pr feedback <owner/repo>#<PR番号>: <未完了TODOまたは要ユーザー確認>"
+```
+
+記録する内容:
+
+- 開始時: 対象PR、対象ファイル、ブランチ、取得したコメント件数。
+- 分類完了時: 対応する指摘、対応しない指摘、要ユーザー確認。
+- 修正完了時: 更新ファイル、対応した指摘ID、未対応理由、矛盾チェック結果。
+- commit/push時: commit要約、push結果、PRコメント有無。
+- ブロック時: 原因、試したこと、再開条件。
+
+注意:
+
+- PR番号、commit SHA、進捗ログは daily log に残し、Hermes persistent memory には保存しない。
+- 未完了TODOは scratchpad に追加し、完了したら `agent-memory scratchpad done --text "..."` で消す。
+- `agent-memory write --target long_term` は、今後も使う安定したレビュー運用ルールだけに限定する。
+
 ## 目的
 
 PRに付いた人間のコメント、レビュー、修正依頼を収集し、分類し、文書またはコードへ反映し、矛盾チェック後に commit/push する。
@@ -178,3 +203,4 @@ gh -R <owner/repo> pr comment <PR番号> --body-file /tmp/<topic>-feedback-respo
 - [ ] 親エージェントがdiffと対象ファイルを確認した。
 - [ ] commit/pushした場合、実コマンド結果を確認した。
 - [ ] 必要に応じてPRへ対応報告コメントを残した。
+- [ ] コメント取得・分類・修正・矛盾チェック・commit/push・残TODOを `agent-memory write` / `agent-memory scratchpad add` で記録した。

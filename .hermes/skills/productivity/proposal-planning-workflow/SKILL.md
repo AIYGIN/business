@@ -44,6 +44,31 @@ metadata:
 6. サブエージェントの自己申告を信用せず、親エージェントがファイル、diff、PR URL、コマンド結果を確認する。
 7. AIYGIN/business の作業は `/Users/ynaragin/git/business` を使い、成果物は原則 `planning/` 配下に置く。
 8. 既存の作業ツリー変更を壊さない。作業前に git status と remote を確認する。
+9. 作業自体の記録を `agent-memory` コマンドで必ず残す。開始時、各Phase完了時、ブロック時、PR/コメント作成時、完了時に、何をしたか・対象ファイル/PR・判断・残TODOを daily log へ書く。未完了TODOは scratchpad に追加する。安定した設計/運用決定だけ long_term に残す。
+
+## agent-memory 記録ルール
+
+提案ワークフローでは、成果物だけでなく作業プロセス自体を再追跡できるように、親エージェントが以下を実行する。
+
+```bash
+rtk agent-memory write --content "proposal: <topic> 開始。入力=<概要> / repo=<repo> / 予定Phase=<phase>"
+rtk agent-memory write --content "proposal: <topic> Phase <N> 完了。実施=<内容> / 判断=<決定> / files=<path> / pr=<url or 未作成> / next=<次作業>"
+rtk agent-memory scratchpad add --text "proposal <topic>: <残TODOまたは要確認>"
+```
+
+記録する内容:
+
+- 開始時: テーマ、入力元、対象repo、想定成果物。
+- 各Phase完了時: 実施内容、判断、作成/更新ファイル、PR URL、次アクション。
+- ブロック時: 原因、試したこと、再開条件。
+- 人間確認待ち: 確認したい事項、保留している作業。
+- 完了時: 最終成果物、PR URL、残課題、ユーザーが次に見るべきポイント。
+
+注意:
+
+- `agent-memory write` は原則 daily log 用に使い、作業履歴・PR番号・一時的な進捗を Hermes persistent memory へ保存しない。
+- `agent-memory scratchpad` は未完了TODOだけに使い、完了したら `done` する。
+- `agent-memory write --target long_term` は、今後も再利用する安定した設計判断・運用ルールだけに限定する。
 
 ## Phase 0: 入力理解・ヒアリング
 
@@ -206,6 +231,62 @@ rtk git -C /Users/ynaragin/git/business commit -m "docs: address review feedback
 rtk git -C /Users/ynaragin/git/business push
 ```
 
+## リポジトリ内へのワークフロー資産配置
+
+AIYGIN/business のように、リポジトリ内で Hermes skill を共有・再利用する場合は、ローカルの `~/.hermes/skills/` から対象リポジトリの `.hermes/skills/` へコピーする。
+
+対象 skill:
+
+- `proposal-review-drafter`
+- `proposal-system-reviewer`
+- `proposal-planning-workflow`
+- `proposal-preflight-research`
+- `user-confirmation-gate`
+- `pr-human-feedback-loop`
+
+配置例:
+
+```bash
+rtk mkdir -p /Users/ynaragin/git/business/.hermes/skills/productivity \
+  /Users/ynaragin/git/business/.hermes/skills/workflow \
+  /Users/ynaragin/git/business/.hermes/skills/github
+
+rtk cp -R /Users/ynaragin/.hermes/skills/productivity/proposal-review-drafter \
+  /Users/ynaragin/git/business/.hermes/skills/productivity/
+rtk cp -R /Users/ynaragin/.hermes/skills/productivity/proposal-system-reviewer \
+  /Users/ynaragin/git/business/.hermes/skills/productivity/
+rtk cp -R /Users/ynaragin/.hermes/skills/productivity/proposal-planning-workflow \
+  /Users/ynaragin/git/business/.hermes/skills/productivity/
+rtk cp -R /Users/ynaragin/.hermes/skills/productivity/proposal-preflight-research \
+  /Users/ynaragin/git/business/.hermes/skills/productivity/
+rtk cp -R /Users/ynaragin/.hermes/skills/workflow/user-confirmation-gate \
+  /Users/ynaragin/git/business/.hermes/skills/workflow/
+rtk cp -R /Users/ynaragin/.hermes/skills/github/pr-human-feedback-loop \
+  /Users/ynaragin/git/business/.hermes/skills/github/
+```
+
+注意:
+
+- コピー先は skill ディレクトリ名そのものではなく、カテゴリ親ディレクトリにする。
+- 例: `.../productivity/` にコピーする。`.../productivity/proposal-review-drafter` をコピー先にすると、既存ディレクトリがある場合に `proposal-review-drafter/proposal-review-drafter/` の二重ディレクトリになり得る。
+- 既存ディレクトリを更新する場合は、対象 skill だけを削除してからコピーし直す。
+- コピー後は `SKILL.md` が期待パスに存在することを確認する。
+
+確認例:
+
+```bash
+rtk git -C /Users/ynaragin/git/business status --short --untracked-files=all
+```
+
+期待パス例:
+
+```text
+/Users/ynaragin/git/business/.hermes/skills/productivity/proposal-planning-workflow/SKILL.md
+/Users/ynaragin/git/business/.hermes/skills/productivity/proposal-preflight-research/SKILL.md
+/Users/ynaragin/git/business/.hermes/skills/workflow/user-confirmation-gate/SKILL.md
+/Users/ynaragin/git/business/.hermes/skills/github/pr-human-feedback-loop/SKILL.md
+```
+
 ## サブエージェント分離方針
 
 親エージェント:
@@ -274,3 +355,6 @@ rtk git -C /Users/ynaragin/git/business push
 - [ ] PRにレビュー要点コメントを残した。
 - [ ] 人間指摘がある場合、指摘収集・文書修正・矛盾チェックを分離して実施した。
 - [ ] 最終diff、PR URL、残課題を親エージェントが確認した。
+- [ ] 開始時、各Phase完了時、ブロック時、PR/コメント作成時、完了時の作業ログを `agent-memory write` で残した。
+- [ ] 未完了TODOや人間確認待ちは `agent-memory scratchpad add` に残し、完了済みTODOは `done` した。
+- [ ] ワークフロー skill 群をリポジトリ内 `.hermes/skills/` に共有配置する場合、カテゴリ親ディレクトリへコピーし、二重ディレクトリになっていないことを確認した。

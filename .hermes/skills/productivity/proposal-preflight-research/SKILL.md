@@ -142,6 +142,27 @@ metadata:
 ### ユーザーに確認したい判断事項
 ```
 
+## agent-memory 記録ルール
+
+`proposal-planning-workflow` の一部として事前調査を行う場合、親エージェントは作業自体を `agent-memory` コマンドで必ず記録する。サブエージェントに調査を任せた場合も、最終的な記録責任は親エージェントが持つ。
+
+```bash
+rtk agent-memory write --content "proposal research: <topic> 調査開始。観点=cost/risk/feasibility/alternatives / input=<概要>"
+rtk agent-memory write --content "proposal research: <topic> 調査完了。結論=<要約> / sources=<主要URL> / 要確認=<項目> / next=<確認ゲートまたは追加調査>"
+rtk agent-memory scratchpad add --text "proposal research <topic>: <未確認事項または追加調査TODO>"
+```
+
+記録する内容:
+
+- 調査開始時: テーマ、前提資料、調査観点。
+- 調査完了時: 結論、主要な根拠URL、未確認事項、推奨方針。
+- ブロック時: 取得できなかった情報、代替調査、再開条件。
+
+注意:
+
+- 作業ログ・一時的な調査結果は daily log に残す。Hermes persistent memory には保存しない。
+- `agent-memory write --target long_term` は、今後も再利用する安定した調査方針や運用決定ができた場合だけ使う。
+
 ## 品質基準
 
 - 事実、仮定、推論、要確認を混ぜない。
@@ -165,3 +186,4 @@ metadata:
 - [ ] 外部情報にURLを付けた、または未調査/不明と明記した。
 - [ ] 推奨方針を出した。
 - [ ] ユーザーに確認すべき判断事項を最大5個に絞った。
+- [ ] 調査開始、調査完了、ブロック/未確認事項を `agent-memory write` または `agent-memory scratchpad add` で記録した。

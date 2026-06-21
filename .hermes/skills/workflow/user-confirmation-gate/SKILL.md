@@ -12,6 +12,28 @@ metadata:
 
 # ユーザー確認ゲート
 
+## agent-memory 記録ルール
+
+`proposal-planning-workflow` の確認ゲートとして使う場合は、確認待ち・承認・修正・保留の作業状態を `agent-memory` コマンドで必ず記録する。
+
+```bash
+rtk agent-memory write --content "proposal confirmation: <topic> 確認依頼。論点=<要約> / options=<案> / pending=<ユーザー判断>"
+rtk agent-memory write --content "proposal confirmation: <topic> 確認結果。result=<承認|修正|保留> / 反映=<内容> / next=<次工程>"
+rtk agent-memory scratchpad add --text "proposal confirmation <topic>: <ユーザー確認待ち事項>"
+```
+
+記録する内容:
+
+- 確認依頼時: 判断してほしい論点、選択肢、推奨方針、保留する作業。
+- 承認時: 承認された前提、次工程、未確認事項。
+- 修正時: 修正された前提、再調査/再確認の要否。
+- 保留時: 再開条件、未完了TODO。
+
+注意:
+
+- 確認待ちやPR番号などの一時的な進捗は daily log / scratchpad に残し、Hermes persistent memory には保存しない。
+- `agent-memory write --target long_term` は、今後も使う安定した確認ルールが決まった場合だけ使う。
+
 ## 目的
 
 調査結果や作業方針を提示したうえで、次工程へ進む前にユーザーの明示的な確認を取る。
@@ -117,3 +139,4 @@ metadata:
 - [ ] 確認質問を最大3つに絞った。
 - [ ] ユーザー承認前に不可逆/外部向け作業へ進んでいない。
 - [ ] 承認または修正内容を次工程へ反映した。
+- [ ] `proposal-planning-workflow` の確認ゲートとして使った場合、確認依頼・確認結果・未完了TODOを `agent-memory write` / `agent-memory scratchpad add` で記録した。

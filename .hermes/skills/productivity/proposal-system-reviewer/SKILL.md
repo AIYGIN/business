@@ -43,6 +43,27 @@ metadata:
 - 本番インフラ設計の最終承認
 - 法務・投資助言該当性・金融ライセンスの最終判断
 
+## agent-memory 記録ルール
+
+システム観点レビューでは、レビュー報告書やPRコメントだけでなく、作業自体を `agent-memory` コマンドで必ず記録する。サブエージェントに初稿を任せた場合も、親エージェントが検証後に記録する。
+
+```bash
+rtk agent-memory write --content "proposal system-review: <topic> 開始。proposal=<path> / pr=<url or 未作成> / 観点=cost/BE/security/failure/cache"
+rtk agent-memory write --content "proposal system-review: <topic> 完了。review=<path> / 更新=<files> / 結論=<要約> / 要確認=<項目> / pr=<url>"
+rtk agent-memory scratchpad add --text "proposal system-review <topic>: <未完了TODOまたは人間確認事項>"
+```
+
+記録する内容:
+
+- 開始時: 対象提案書、PR、レビュー観点、想定成果物。
+- 完了時: レビュー報告書パス、提案書への反映有無、PRコメント有無、残る要確認事項。
+- ブロック時: 判断できない前提、取得できない情報、再開条件。
+
+注意:
+
+- 作業ログ、PR番号、一時的な検討内容は daily log に残し、Hermes persistent memory には保存しない。
+- `agent-memory write --target long_term` は、今後も再利用する安定した設計/運用判断だけに限定する。
+
 ## 前提
 
 - 日本語で書く。
@@ -291,3 +312,4 @@ gh -R AIYGIN/business pr comment <PR番号> --body-file /tmp/pr-comment.md
 - [ ] 未確認事項を断定していない。
 - [ ] 必要に応じて AIYGIN/business の `planning/` 配下に提案書を追加した。
 - [ ] commit、push、PR作成、PRコメントを実行し、URLを確認した。
+- [ ] システムレビュー開始・完了・ブロック/未確認事項を `agent-memory write` / `agent-memory scratchpad add` で記録した。
