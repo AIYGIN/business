@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [proposal, elevator-pitch, scqa, writing, review, japanese, productivity]
-    related_skills: [proposal-system-reviewer, powerpoint, google-workspace]
+    related_skills: [proposal-planning-workflow, proposal-preflight-research, user-confirmation-gate, pr-human-feedback-loop, proposal-system-reviewer, powerpoint, google-workspace]
 ---
 
 # エレベーターピッチ型 提案書ドラフト作成スキル
@@ -320,6 +320,20 @@ AI Agent は最終決裁者ではなく、次を担当する。
 7. ホームディレクトリ直下にMarkdownファイルとして保存する。
 8. 保存したファイルを読み返し、冒頭が30〜60秒で伝わるか、空欄・断定しすぎ・曖昧語がないか確認する。
 9. ユーザーにファイルパスと人間レビュー観点を報告する。
+
+## 提案書作成・レビューPR化ワークフローで使う場合
+
+ユーザーが「調査してから提案書化」「planningにPR」「レビュー報告書も作る」「人間指摘を反映する」など、単発ドラフトを超える一連の流れを求めた場合は、先に `proposal-planning-workflow` を使う。
+
+この場合、このスキル単体で最初から提案書を作り始めてはいけない。親エージェントは次の順序を守る。
+
+1. ユーザーのやりたいことをヒアリングする。曖昧な依頼には、回答・作業開始前に最大3問まで確認する。
+2. Markdown文書が指定された場合は、その内容を読んで目的・読み手・意思決定・制約を抽出する。
+3. `proposal-preflight-research` を使い、別サブエージェントでコスト、リスク、実現可能性、既存サービス/代用手段を調査する。
+4. `user-confirmation-gate` を使い、調査結果をユーザーに提示し、確認が取れてからこのスキルで提案書ドラフトを作成する。
+5. 成果物は原則 `/Users/ynaragin/git/business/planning/` 配下に配置し、`AIYGIN/business` のPRブランチへ commit/push する。
+6. その後、`proposal-system-reviewer` で別ファイルのレビュー報告書を作成し、同じPRブランチへ追加する。
+7. PR上の人間指摘がある場合は、`pr-human-feedback-loop` を使い、指摘収集・文書修正・矛盾チェックをサブエージェント分離で実施してから commit/push する。
 
 ## システム観点レビューを追加する場合
 

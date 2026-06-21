@@ -7,7 +7,7 @@ license: MIT
 metadata:
   hermes:
     tags: [proposal, system-review, architecture, security, cost, github, japanese]
-    related_skills: [proposal-review-drafter, github-workflows, ai-coding-agents]
+    related_skills: [proposal-planning-workflow, proposal-preflight-research, user-confirmation-gate, pr-human-feedback-loop, proposal-review-drafter, github-workflows, ai-coding-agents]
 ---
 
 # 提案書向け システム観点レビュー作成スキル
@@ -119,6 +119,20 @@ metadata:
 
 ### <番号>.9 判断事項
 ```
+
+## 提案書作成・レビューPR化ワークフローで使う場合
+
+ユーザーが「調査してから提案書化」「planningにPR」「レビュー報告書も作る」「人間指摘を反映する」など、単発レビューを超える一連の流れを求めた場合は、先に `proposal-planning-workflow` を使う。
+
+この場合、このスキルは Phase 4 以降のシステム観点レビュー担当として使う。
+
+1. Phase 1 で `proposal-preflight-research` を使った別サブエージェントが調査したコスト、リスク、実現可能性、既存サービス/代用手段を読み込む。
+2. Phase 3 で `proposal-review-drafter` が作成した提案書を読み、事実・仮定・要確認を分けてレビューする。
+3. レビュー結果は提案書本文に埋め込むだけでなく、原則として別Markdownのレビュー報告書にする。
+4. レビュー報告書は `/Users/ynaragin/git/business/planning/<YYYYMMDD>-<short-topic>-system-review.md` に配置する。
+5. 提案書本文へ反映すべき修正がある場合は、提案書とレビュー報告書の両方が矛盾しないように更新する。
+6. 同じPRブランチに commit/push し、PRへレビュー要点コメントを残す。
+7. 人間指摘がある場合は、`pr-human-feedback-loop` を使い、指摘収集・文書修正・矛盾チェックをサブエージェント分離で行い、親エージェントが最終diffを確認する。
 
 ## サブエージェント活用手順
 
