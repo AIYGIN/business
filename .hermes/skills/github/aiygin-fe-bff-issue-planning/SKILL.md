@@ -1,14 +1,14 @@
 ---
 name: aiygin-fe-bff-issue-planning
 description: FE/BFF の開発計画を GitHub Issue 形式へ変換し、AIYGIN/business の親 Issue だけを作成したうえで、AIYGIN/fe と AIYGIN/bff の子 Issue 作成は各リポジトリ内のテンプレート・スクリプト・skill へ委譲するワークフロー。
-version: 1.1.0
+version: 1.3.0
 author: Hermes Agent
 license: MIT
 platforms: [macos, linux, windows]
 metadata:
   hermes:
     tags: [github, issues, planning, fe, bff, business, aiygin]
-    related_skills: [github-issues, github-pr-summarizer, aiygin-product-orchestrator]
+    related_skills: [github-issues, github-pr-summarizer, aiygin-product-orchestrator, aiygin-codegraph-investigation-common, aiygin-fe-code-investigation, aiygin-bff-code-investigation]
 ---
 
 # AIYGIN FE/BFF 開発計画の business Issue 化と子 Issue 作成委譲
@@ -48,27 +48,22 @@ metadata:
 
 Issue 起票前に、FE/BFF の現状を実コードから確認する。ここでは Issue 本文を作成しない。
 
-- FE 調査担当:
-  - `AIYGIN/fe` の routing / middleware / login 画面 / protected route / TODO 画面の有無を確認する。
-  - BFF OpenAPI から Orval で API client / mock を自動生成している設定、script、生成物配置を確認する。
-  - 生成物を手動編集していないか、再生成手順がどこにあるかを確認する。
-  - FE test / e2e / mock の既存方針を確認する。
-- BFF 調査担当:
-  - `AIYGIN/bff` の NestJS module/controller/service/resource/repository 構成を確認する。
-  - Swagger / OpenAPI docs decorator の配置を確認する。
-  - 既存 Guard / decorator / Cookie / CORS / JWT / DB 接続 / migration 方針を確認する。
-  - Resource 層、外部 HTTP client、test / e2e / OpenAPI e2e の既存方針を確認する。
+調査は親エージェントが直接すべて読むのではなく、原則として `delegate_task` で FE/BFF それぞれの調査サブエージェントを並列起動する。詳細手順は以下の 3 skill に分離する。
 
-調査結果には、必ず以下を含める。
+- 共通ルール: `aiygin-codegraph-investigation-common`
+- FE 調査: `aiygin-fe-code-investigation`
+- BFF 調査: `aiygin-bff-code-investigation`
 
-```text
-- 確認した repository / path
-- 現在の構成
-- 既存の規約・テンプレート・script
-- 今回の要件に対する差分
-- Issue に反映すべき制約
-- 未確認事項
-```
+親エージェントは、上記 skill から必要な context だけを調査サブエージェントへ渡す。親エージェント自身は FE/BFF の詳細な探索ログを抱え込まず、返却された調査結果 schema を使って横断設計に進む。
+
+基本方針:
+
+- `AIYGIN/fe` と `AIYGIN/bff` は `.codegraph/codegraph.db` がある前提で、コード理解・影響範囲確認では CodeGraph を優先する。
+- FE 調査では `aiygin-fe-code-investigation` を使い、routing、middleware、認証導線、Orval、生成 API client / mock、Storybook、test、UI 導線を確認する。
+- BFF 調査では `aiygin-bff-code-investigation` を使い、NestJS module/controller/service/resource/repository、DTO、OpenAPI docs、auth、DB、test/e2e を確認する。
+- 共通の出力 schema、fallback 方針、禁止事項は `aiygin-codegraph-investigation-common` に従う。
+- 調査、設計、Issue 発行を同じサブエージェントに混ぜない。
+- 調査サブエージェントは Issue 作成やコード変更を行わない。
 
 ### 2. 横断設計フェーズ
 
@@ -97,11 +92,18 @@ Issue 発行担当は、設計結果をもとに `AIYGIN/business` の親 Issue 
 推奨する `delegate_task` 分担:
 
 ```text
-1. FE 調査エージェント: AIYGIN/fe の現状調査だけを行う。
-2. BFF 調査エージェント: AIYGIN/bff の現状調査だけを行う。
+1. FE 調査エージェント: `aiygin-codegraph-investigation-common` + `aiygin-fe-code-investigation` の内容で AIYGIN/fe の現状調査だけを行う。
+2. BFF 調査エージェント: `aiygin-codegraph-investigation-common` + `aiygin-bff-code-investigation` の内容で AIYGIN/bff の現状調査だけを行う。
 3. 親エージェント: 2つの調査結果とユーザー要件から横断設計を作る。
 4. Issue 発行 skill/エージェント: business Issue 作成・更新だけを行う。
 ```
+
+調査時の context load 方針:
+
+- FE だけ調査する場合は、共通 + FE 調査 skill のみ使い、BFF 調査 skill は読まない。
+- BFF だけ調査する場合は、共通 + BFF 調査 skill のみ使い、FE 調査 skill は読まない。
+- business Issue planning のように FE/BFF 両方が必要な場合だけ、FE/BFF 調査を `delegate_task` batch mode で並列実行する。
+- 親エージェントは調査 skill の詳細をすべて保持せず、サブエージェントへ渡す context と返却された調査結果 schema に絞る。
 
 
 ## 使用する場面
