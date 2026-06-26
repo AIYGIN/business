@@ -1,75 +1,106 @@
-# AIYGIN FE/BFF 子 Issue 委譲先 asset 調査メモ
+# AIYGIN FE/BFF 子 Issue 作成委譲 asset 調査メモ
 
-この reference は、`aiygin-fe-bff-issue-planning` で business 親 Issue 作成後に FE/BFF 子 Issue を各 repo 側へ委譲するとき、委譲先 asset を見落とさないための調査メモである。
+このメモは `aiygin-fe-bff-issue-planning` で FE/BFF 子 Issue 作成を委譲するとき、各 repo-local asset の有無と扱いを確認するための補助資料である。
 
-## 背景
+## 原則
 
-TODOリストの Supabase DB 永続化 / BFF 疎通計画で、business 親 Issue 作成前の FE/BFF 調査に加えて、各 repo 内の子 Issue 作成 asset も確認したところ、repo ごとに委譲方法が異なった。
+- この skill から直接作成してよい Issue は `AIYGIN/business` の親 Issue だけ。
+- FE/BFF 子 Issue は各 repo 内の template / script / skill / workflow に委譲する。
+- repo-local asset が見つからない場合、代替としてこの skill から直接 `gh issue create --repo AIYGIN/fe` / `AIYGIN/bff` を実行しない。
+- 未作成理由を business 親 Issue にコメントし、agent-memory scratchpad に未完了 TODO として残す。
 
-## FE: AIYGIN/fe
+## 2026-06 高配当分析画面 PoC で確認した状況
 
-確認できた asset:
+### AIYGIN/bff
 
-- `.codex/skills/plan-to-issue/SKILL.md`
-- `.codex/skills/plan-to-issue/references/rules.md`
-- `.codex/skills/plan-to-issue/assets/template.md`
-- `.codex/skills/plan-to-issue/scripts/create_issue.sh`
-- `.codex/agents/issue_responder.toml`
-- `.codex/agents/pm.toml`
+確認済み asset:
 
-委譲方針:
+- `/Users/ynaragin/git/bff/.github/ISSUE_TEMPLATE/api-interface.yml`
 
-- FE 子 Issue は repo 内の `plan-to-issue` skill と `scripts/create_issue.sh` に委譲する。
-- `create_issue.sh` の想定は概ね `./create_issue.sh "タイトル" "本文"`。
-- FE 子 Issue 本文では以下を明記すると後続実装へつながりやすい。
-  - 親 business Issue URL
-  - Orval 生成物を手動編集しないこと
-  - BFF 契約変更時は OpenAPI 更新後に FE 側で Orval 再生成すること
-  - Storybook/test は MSW 継続、実 BFF 疎通は mock 無効化・環境切替を別途扱うこと
+用途:
 
-## BFF: AIYGIN/bff
+- PM が BFF API の公開 IF を決めるための Issue template。
+- Controller mock PR の完了条件は Swagger/OpenAPI で契約が表現されること。
+- 高配当分析画面 PoC では、この template に沿って以下の API IF Issue を作成できた。
+  - `API IF: GET /api/dividend-analysis`
+  - `API IF: GET /api/dividend-analysis/{symbol}`
 
-確認できた asset:
+使い方の要点:
 
-- `.github/ISSUE_TEMPLATE/api-interface.yml`
-- `.codex/workflows/api_implementation_flow.md`
-- `.codex/workflows/foundation_implementation_flow.md`
-- `.codex/agents/implementation_planner.toml`
-- `docs/layer-boundaries.md`
+- `api-if` と `pm` label が repo に存在することを確認する。
+- 本文には必ず親 `AIYGIN/business` Issue URL を入れる。
+- BFF の API IF Issue は endpoint 単位で分けると扱いやすい。
+- 作成後は `gh issue view --repo AIYGIN/bff <number> --json url,title,body` で、親 Issue URL が本文に含まれることを検証する。
 
-確認できなかった asset:
+### AIYGIN/fe
 
-- FE の `create_issue.sh` に相当する、明確な repo-local Issue 作成 script は確認できなかった。
+確認済み asset:
 
-委譲方針:
+- `/Users/ynaragin/git/fe/.codex/skills/plan-to-issue/SKILL.md`
+- `/Users/ynaragin/git/fe/.codex/skills/plan-to-issue/references/rules.md`
+- `/Users/ynaragin/git/fe/.codex/skills/plan-to-issue/assets/template.md`
+- `/Users/ynaragin/git/fe/.codex/skills/plan-to-issue/scripts/create_issue.sh`
+- `/Users/ynaragin/git/fe/.codex/agents/issue_responder.toml`
 
-- BFF 子 Issue は repo 内の GitHub Issue template / implementation workflow / implementation planner の観点に沿って作る。
-- 専用作成 script が見つからない場合でも、repo 内 template/workflow に合わせた本文を作り、委譲先サブエージェント側で `gh issue create --repo AIYGIN/bff` を実行してよい。
-- 親の `aiygin-fe-bff-issue-planning` skill 自体が直接 `AIYGIN/bff` に Issue 作成するのではなく、BFF repo の文脈を読んだ委譲先が作る。
+用途:
 
-## 親エージェントの検証
+- `plan-to-issue` は、開発計画をコンポーネント設計・Store設計を含む GitHub Issue 形式へ変換し、`scripts/create_issue.sh` で FE repo に Issue を作成する repo-local skill。
+- `create_issue.sh` は current working directory の GitHub repo に対して `gh issue create` を実行するため、必ず `/Users/ynaragin/git/fe` を workdir にして実行する。
 
-子 Issue 作成後、サブエージェントの自己申告だけで完了扱いにしない。
+使い方の要点:
 
-必ず親エージェントが以下を検証する。
+1. 必ず以下を読む。
+   - `SKILL.md`
+   - `references/rules.md`
+   - `assets/template.md`
+   - `scripts/create_issue.sh`
+2. `rules.md` の重要ルールを守る。
+   - summary は要約可。
+   - tasks は要約禁止・完全展開必須。
+   - UI を含む場合は `コンポーネント設計` を必須にする。
+   - API状態または共有状態を扱う場合は `Store設計` を必須にする。
+   - 受け入れ条件にも `コンポーネント設計準拠` / `Store設計準拠` を入れる。
+3. `assets/template.md` の見出し構成で本文を作る。
+4. `/tmp/...md` などに本文を作成し、以下のように FE repo root で script を実行する。
 
 ```bash
-gh issue view <FE_ISSUE_NUMBER> --repo AIYGIN/fe --json url,title,number,body --jq \
-  '{number,title,url,hasParent:(.body|contains("<BUSINESS_ISSUE_URL>"))}'
-
-gh issue view <BFF_ISSUE_NUMBER> --repo AIYGIN/bff --json url,title,number,body --jq \
-  '{number,title,url,hasParent:(.body|contains("<BUSINESS_ISSUE_URL>"))}'
+cd /Users/ynaragin/git/fe
+body=$(cat /tmp/<fe-issue-body>.md)
+bash .codex/skills/plan-to-issue/scripts/create_issue.sh "feat: <タイトル>" "$body"
 ```
 
-検証後、business 親 Issue に FE/BFF 子 Issue URL をコメントする。
+5. 作成後は `gh issue view --repo AIYGIN/fe <number> --json url,title,body` で、親 business Issue URL と必要な参照 Issue URL が本文に含まれることを検証する。
 
-## 調査フェーズへの反映
+高配当分析画面 PoC での実績:
 
-FE/BFF 調査サブエージェントへは、コード構成だけでなく「子 Issue 作成用の repo-local asset も確認する」ことを明示的に依頼するとよい。
+- 親: `https://github.com/AIYGIN/business/issues/23`
+- FE: `https://github.com/AIYGIN/fe/issues/32`
+- BFF:
+  - `https://github.com/AIYGIN/bff/issues/25`
+  - `https://github.com/AIYGIN/bff/issues/26`
 
-調査結果には以下を含める。
+注意:
 
-- 子 Issue 作成用 skill / template / script / workflow の path
-- 使い方
-- 見つからなかった場合の fallback 方針
-- その repo の Issue 本文に必ず入れるべき注意点
+- FE repo では `.github/ISSUE_TEMPLATE` ではなく `.codex/skills/plan-to-issue/` 配下を優先して探す。
+- `.github/ISSUE_TEMPLATE` だけを探して「asset 未検出」と判断しない。
+- `create_issue.sh` は `--repo` を取らないため、workdir を間違えると別 repo に Issue を作る恐れがある。必ず `/Users/ynaragin/git/fe` で実行する。
+
+## business 親 Issue へのコメント例
+
+```markdown
+FE/BFF 子 Issue 作成結果です。
+
+- BFF:
+  - 一覧 API IF: <BFF issue URL>
+  - 詳細 API IF: <BFF issue URL>
+- FE:
+  - 未作成
+  - 理由: ローカルの `AIYGIN/fe` には子 Issue 作成専用の `.github/ISSUE_TEMPLATE` / `SKILL.md` / issue create script が見つかりませんでした。
+  - `aiygin-fe-bff-issue-planning` のルール上、この workflow から `AIYGIN/fe` に直接 `gh issue create` することは禁止のため、FE 子 Issue は repo-local の作成手段が確認できるまで保留します。
+```
+
+## 今後の確認観点
+
+- FE repo に `.github/ISSUE_TEMPLATE` や issue 作成 script が追加された場合、この reference を更新する。
+- BFF の `api-interface.yml` が変更された場合、必須項目・label・作成手順を更新する。
+- 子 Issue 作成を subagent に委譲した場合でも、親エージェントが `gh issue view` で URL/title/body/親 Issue URL 含有を検証してから成功報告する。
