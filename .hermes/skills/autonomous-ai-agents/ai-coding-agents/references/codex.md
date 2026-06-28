@@ -38,36 +38,28 @@ standalone Codex CLI, a valid CLI OAuth session may live under
 `~/.codex/auth.json`; do not treat a missing `OPENAI_API_KEY` alone as proof
 that Codex auth is missing.
 
-## Hermes 経由での Headroom wrapper 必須ルール
+## Hermes 経由での Codex CLI 直接起動ルール
 
-Hermes から Codex CLI を起動する場合は、原則として `codex` を直接呼ばず、必ず Headroom で wrap する。
+Hermes から Codex CLI を起動する場合は、追加 wrapper を使わず `codex` を直接起動する。
 
 ```bash
-headroom wrap codex exec --full-auto "<task prompt>"
+codex exec --full-auto "<task prompt>"
 ```
-
-理由:
-
-- Codex が読むファイル、検索結果、build/test log などを Headroom の圧縮フィルターに通し、トークン使用量を抑える。
-- Hermes 側では従来どおり `pty=true` を使う。Headroom は Codex コマンドの前段に置く。
 
 実行前に確認するもの:
 
 ```bash
-command -v headroom
 command -v codex
 ```
 
-`headroom` が見つからない場合は、Codex を直接起動して続行せず、ユーザーに未導入であることを報告する。ただし、ユーザーが明示的に「今回は headroom なしでよい」と指示した場合だけ例外とする。
-
 ### agent-memory 記録
 
-Hermes 経由で `headroom wrap codex ...` を実行したら、起動・完了・失敗を `agent-memory` に必ず記録する。
+Hermes 経由で `codex ...` を実行したら、起動・完了・失敗を `agent-memory` に必ず記録する。
 
 ```bash
-rtk agent-memory write --content "codex headroom: 開始 repo=<repo> task=<要約> command=headroom wrap codex exec ..."
-rtk agent-memory write --content "codex headroom: 完了 repo=<repo> result=<要約> files=<変更ファイル> tests=<検証結果>"
-rtk agent-memory write --content "codex headroom: 失敗 repo=<repo> exit=<code> reason=<理由> next=<再開条件>"
+agent-memory write --content "codex: 開始 repo=<repo> task=<要約> command=codex exec ..."
+agent-memory write --content "codex: 完了 repo=<repo> result=<要約> files=<変更ファイル> tests=<検証結果>"
+agent-memory write --content "codex: 失敗 repo=<repo> exit=<code> reason=<理由> next=<再開条件>"
 ```
 
 未完了TODOやユーザー確認待ちは `agent-memory scratchpad add` に残す。
@@ -75,19 +67,19 @@ rtk agent-memory write --content "codex headroom: 失敗 repo=<repo> exit=<code>
 ## One-Shot Tasks
 
 ```
-terminal(command="headroom wrap codex exec 'Add dark mode toggle to settings'", workdir="~/project", pty=true)
+terminal(command="codex exec 'Add dark mode toggle to settings'", workdir="~/project", pty=true)
 ```
 
 For scratch work (Codex needs a git repo):
 ```
-terminal(command="cd $(mktemp -d) && git init && headroom wrap codex exec 'Build a snake game in Python'", pty=true)
+terminal(command="cd $(mktemp -d) && git init && codex exec 'Build a snake game in Python'", pty=true)
 ```
 
 ## Background Mode (Long Tasks)
 
 ```
 # Start in background with PTY
-terminal(command="headroom wrap codex exec --full-auto 'Refactor the auth module'", workdir="~/project", background=true, pty=true)
+terminal(command="codex exec --full-auto 'Refactor the auth module'", workdir="~/project", background=true, pty=true)
 # Returns session_id
 
 # Monitor progress
@@ -121,7 +113,7 @@ or `loopback: Failed RTM_NEWADDR: Operation not permitted`.
 In that context, prefer:
 
 ```
-headroom wrap codex exec --sandbox danger-full-access "<task>"
+codex exec --sandbox danger-full-access "<task>"
 ```
 
 Use process boundaries as the safety layer instead: explicit `workdir`, clean git
@@ -133,7 +125,7 @@ human/agent confirmation before committing broad changes.
 Clone to a temp directory for safe review:
 
 ```
-terminal(command="REVIEW=$(mktemp -d) && git clone https://github.com/user/repo.git $REVIEW && cd $REVIEW && gh pr checkout 42 && headroom wrap codex review --base origin/main", pty=true)
+terminal(command="REVIEW=$(mktemp -d) && git clone https://github.com/user/repo.git $REVIEW && cd $REVIEW && gh pr checkout 42 && codex review --base origin/main", pty=true)
 ```
 
 ## Parallel Issue Fixing with Worktrees
@@ -144,8 +136,8 @@ terminal(command="git worktree add -b fix/issue-78 /tmp/issue-78 main", workdir=
 terminal(command="git worktree add -b fix/issue-99 /tmp/issue-99 main", workdir="~/project")
 
 # Launch Codex in each
-terminal(command="headroom wrap codex --yolo exec 'Fix issue #78: <description>. Commit when done.'", workdir="/tmp/issue-78", background=true, pty=true)
-terminal(command="headroom wrap codex --yolo exec 'Fix issue #99: <description>. Commit when done.'", workdir="/tmp/issue-99", background=true, pty=true)
+terminal(command="codex --yolo exec 'Fix issue #78: <description>. Commit when done.'", workdir="/tmp/issue-78", background=true, pty=true)
+terminal(command="codex --yolo exec 'Fix issue #99: <description>. Commit when done.'", workdir="/tmp/issue-99", background=true, pty=true)
 
 # Monitor
 process(action="list")
@@ -165,8 +157,8 @@ terminal(command="git worktree remove /tmp/issue-78", workdir="~/project")
 terminal(command="git fetch origin '+refs/pull/*/head:refs/remotes/origin/pr/*'", workdir="~/project")
 
 # Review multiple PRs in parallel
-terminal(command="headroom wrap codex exec 'Review PR #86. git diff origin/main...origin/pr/86'", workdir="~/project", background=true, pty=true)
-terminal(command="headroom wrap codex exec 'Review PR #87. git diff origin/main...origin/pr/87'", workdir="~/project", background=true, pty=true)
+terminal(command="codex exec 'Review PR #86. git diff origin/main...origin/pr/86'", workdir="~/project", background=true, pty=true)
+terminal(command="codex exec 'Review PR #87. git diff origin/main...origin/pr/87'", workdir="~/project", background=true, pty=true)
 
 # Post results
 terminal(command="gh pr comment 86 --body '<review>'", workdir="~/project")
@@ -176,7 +168,7 @@ terminal(command="gh pr comment 86 --body '<review>'", workdir="~/project")
 
 1. **Always use `pty=true`** — Codex is an interactive terminal app and hangs without a PTY
 2. **Git repo required** — Codex won't run outside a git directory. Use `mktemp -d && git init` for scratch
-3. **Use `exec` for one-shots** — `headroom wrap codex exec "prompt"` runs and exits cleanly
+3. **Use `exec` for one-shots** — `codex exec "prompt"` runs and exits cleanly
 4. **`--full-auto` for building** — auto-approves changes within the sandbox
 5. **Background for long tasks** — use `background=true` and monitor with `process` tool
 6. **Don't interfere** — monitor with `poll`/`log`, be patient with long-running tasks
