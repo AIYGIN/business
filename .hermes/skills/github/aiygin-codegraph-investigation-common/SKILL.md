@@ -62,11 +62,9 @@ codegraph explore "<調査したい質問>"
 codegraph node <symbol-or-file>
 ```
 
-`rtk` が使える環境では、shell command に原則 `rtk` を prefix する。ただし CodeGraph の raw output が必要な場合や `rtk` 経由で問題が出る場合は通常コマンドに戻してよい。
-
 ## fallback 条件
 
-以下の場合だけ `search_files` / `read_file` / `rtk grep` に fallback する。
+以下の場合だけ `search_files` / `read_file` / `grep` に fallback する。
 
 - `.codegraph/` が存在しない。
 - `.codegraph/codegraph.db` が存在しない。

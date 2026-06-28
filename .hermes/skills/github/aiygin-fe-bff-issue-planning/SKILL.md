@@ -366,6 +366,34 @@ BFF 側へ渡す観点の例。
 
 FE/BFF 側の委譲が完了し、子 Issue URL が得られたら、親エージェント自身が `gh issue view` で再検証してから business Issue にコメントする。サブエージェントの自己申告だけで成功扱いにしない。
 
+## 親 Issue コメント反映ループ
+
+親 `AIYGIN/business` Issue に人間コメントで route、API path、認証、DTO 命名、保存先、実装配置などの確定方針が追加された場合は、親 Issue だけでなく作成済み FE/BFF 子 Issue も同時に見直す。
+
+手順:
+
+1. `gh issue view <parent> --repo AIYGIN/business --json comments,body,title` で対象コメントと現行本文を取得する。
+2. コメント内の確定事項を分類する。
+   - FE route（例: `/dividend`）
+   - BFF endpoint（例: 既存方針に合わせた `/company/...`）
+   - 認証（例: JWT 必須）
+   - path param 名・形式（例: `symbolId` / 4桁証券コード）
+   - DTO 表現（例: `analysisSummary: null`, FCF N/A は `null` + boolean）
+   - resource / utility / scripts など実装配置
+3. 親 Issue 本文を更新する。
+4. 作成済み FE 子 Issue と BFF 子 Issue を `gh issue edit --body-file` で更新する。
+5. `gh issue view` で stale な旧記述が残っていないか確認する。
+   - 旧 API path（例: `/api/dividend-analysis`）
+   - 未確定扱いのまま残った route / auth / DTO 方針
+   - 子 Issue 未作成などの古い作業状況コメント
+6. business 親 Issue に反映結果コメントを残す。
+
+注意:
+
+- API path や DTO が変わった場合、BFF Issue の title も本文と合わせて更新する。
+- FE Issue には新しい BFF endpoint、Orval 生成結果確認、null/TODO 表示、path param 名を反映する。
+- `gh issue view --jq` で boolean 式を書くときは object の値に文字列を直接置かず、`{title:.title, ...}` のように key を明示する。
+
 必須 verification:
 
 ```bash
@@ -492,6 +520,8 @@ FE/BFF 子 Issue の label / assignee は、各リポジトリの委譲先テン
 8. FE/BFF の子 Issue URL を business Issue へ戻し忘れる。
 9. 子 Issue 作成の委譲が失敗したのに、成功したように報告する。
 10. 情報不足を推測で埋める。`未確定` / `要確認` と書く。
+11. FE repo の `.github/ISSUE_TEMPLATE` だけを探し、`.codex/skills/plan-to-issue/` を見落として FE 子 Issue 未作成扱いにする。
+12. 親 business Issue の人間コメントで API path や認証方針が確定したのに、作成済み FE/BFF 子 Issue の古い endpoint・未確定事項を更新し忘れる。
 
 ## 完了確認チェックリスト
 
