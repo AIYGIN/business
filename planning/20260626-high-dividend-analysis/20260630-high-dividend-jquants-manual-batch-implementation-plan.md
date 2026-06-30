@@ -13,7 +13,7 @@ v1本格化では、外部APIは「実データ取得」だけに使う。配当
 | 利用範囲 | 本人の個人利用/PoCのみ |
 | 公開範囲 | 一般公開、第三者提供、商用SaaS、社内外共有はv1対象外 |
 | 外部データ | J-Quants APIを第一候補。ただし、まず無料範囲を使う |
-| 補完データ | J-Quants無料範囲で不足する項目は手動CSVで補完する |
+| 補完データ | J-Quants無料範囲で不足する項目は手動CSVで補完する。実データCSVはGit管理せず、BFF repo内のgitignore/private localに置く |
 | 更新方式 | 自動cronではなく、人間が任意タイミングで起動する手動batch |
 | 画面表示 | 画面リクエスト中にJ-Quants APIへ同期アクセスしない |
 | スコア計算 | BFFがRaw/CSVデータから正規化・計算する |
@@ -60,7 +60,7 @@ BFF側に、任意タイミングで起動できる手動batchを追加する。
 
 ```bash
 pnpm dividend-analysis:fetch --symbols 8058,9432,8306 --as-of 2026-06-30
-pnpm dividend-analysis:import-csv --file data/dividend-analysis/manual-supplement.csv
+pnpm dividend-analysis:import-csv --file data/dividend-analysis/private/manual-supplement.csv
 pnpm dividend-analysis:recalculate --score-version dividend-score-v1
 ```
 
@@ -81,6 +81,8 @@ pnpm dividend-analysis:recalculate --score-version dividend-score-v1
 - `importBatchId`
 
 v1ではJSONファイル、SQLite、既存DBのいずれでもよい。BFF実装時に既存技術スタックへ合わせる。
+
+実データCSVやJ-Quants由来Raw JSONはGit管理しない。BFF repoにはCSVテンプレート、schema、import/fetch/recalculateコマンド、テスト用fixtureだけを置き、実データは `data/dividend-analysis/private/` のようなgitignore配下に配置する。
 
 ### 4.3 正規化
 
@@ -171,12 +173,72 @@ symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,d
 - 転記ミスを前提に、BFF import時に型・範囲・必須項目を検証する。
 - 手動CSV由来の項目はFEで出典表示できるようにする。
 
+### 7.1 CSV配置方式の議論と採用案
+
+議論した選択肢は以下。
+
+| 案 | 内容 | メリット | デメリット/リスク | 判断 |
+|---|---|---|---|---|
+| A | BFF repoに実データCSVもcommitする | 単純で再現性が高い | J-Quants由来データをGitHubに置くリスクがある。repoがprivateでも将来共有・漏洩・公開化の懸念が残る | 非採用 |
+| B | 無料公開サーバー/S3的な場所にCSVを置き、BFFが参照する | 更新しやすく、BFF deployとデータ更新を分けやすい | 公開状態になりやすく、J-Quantsの本人私的利用/PoC前提と相性が悪い。第三者が使用できる状態に近づく | 非採用 |
+| C | BFF repoにimport機構だけ置き、実データCSVはgitignore/private localに置く | 最小構成、安全寄り、PoC向き。BFFのNormalizer/Score Calculatorと近い場所で検証できる | 実行環境ごとにCSV配置が必要 | 採用 |
+| D | private object storageにCSVを置き、BFFまたはbatchが認証付きで取得する | 実運用に近く、repoにデータを置かずに済む | 認証、権限、設定、運用が増える | Phase 2以降 |
+| E | `batch` repoを新設し、取得・import・recalculateを分離する | 責務分離が明確 | PoC初期には過剰。BFF API/データ保存との調整が増える | 後回し |
+
+採用案はC。
+
+```text
+/Users/ynaragin/git/bff
+  data/
+    dividend-analysis/
+      templates/
+        manual-supplement.example.csv   # Git管理OK
+      private/
+        manual-supplement.csv           # gitignore
+        jquants-raw-YYYYMMDD.json       # gitignore
+```
+
+`.gitignore` 例:
+
+```gitignore
+data/dividend-analysis/private/
+```
+
+BFF repoに置くもの:
+
+- CSVテンプレート
+- CSV schema / import validation
+- J-Quants fetch command
+- CSV import command
+- recalculate command
+- Normalizer / Score Calculator
+- テスト用fixture
+
+BFF repoに置かないもの:
+
+- J-Quants由来の実データCSV
+- J-Quants APIキー
+- 有料/規約対象データのRaw dump
+- 第三者が再利用できる形の分析済みデータ
+
+`batch` repoを新設する判断基準:
+
+- J-Quants以外にEDINET、KABU+、複数CSVなどデータ源が増える。
+- batchだけ依存ライブラリが重くなる。
+- batchだけ別実行環境、別スケジュール、別deployにしたくなる。
+- raw / normalized / score result の履歴管理が必要になる。
+- 失敗通知、再実行、監査ログなどの運用要件が強くなる。
+
+現時点では、責務分離よりPoCで実データを安全に扱えることを優先し、BFF repo内のgitignore/private local方式で進める。
+
 ## 8. 受け入れ条件
 
 ### BFF
 
 - [ ] 手動batchでJ-Quants API無料範囲の実データを取得できる。
 - [ ] 手動CSVをimportできる。
+- [ ] 実データCSVとJ-Quants由来Raw JSONはgitignore/private localに置き、Git管理しない。
+- [ ] BFF repoにはCSVテンプレート、schema、import/fetch/recalculateコマンド、fixtureだけを置く。
 - [ ] Raw Dataに取得元、基準日、取得日時が保存される。
 - [ ] BFFがRaw/CSVからNormalized Dataを生成する。
 - [ ] BFFがスコア計算を行う。
@@ -199,6 +261,7 @@ symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,d
 | リスク | 内容 | 対策 |
 |---|---|---|
 | J-Quants規約 | 本人の私的利用を超えると制限に触れる可能性 | v1は本人PoC限定。第三者共有・公開・商用化は別途再設計 |
+| 公開CSV配置 | 無料公開サーバー/S3的な場所にCSVを置くと第三者が使用できる状態に近づく | 採用しない。実データCSVはBFF repoのgitignore/private localに置く |
 | 無料範囲の不足 | 配当金情報、BS/PL/CF詳細、10年履歴が足りない可能性 | まず無料範囲でSpikeし、不足は手動CSV補完 |
 | 転記ミス | CSV補完で誤入力が入り得る | import時バリデーション、出典・基準日管理、レビュー欄 |
 | スコア定義の揺れ | 計算式変更で過去スコアと混同する | `scoreVersion` を必須にする |
@@ -219,7 +282,8 @@ symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,d
 - 期待成果物:
   - 手動batch設計。
   - Raw Data保存設計。
-  - CSV import設計。
+  - 実データCSVをgitignore/private localに置く方針。
+  - CSV template/schema/import設計。
   - Normalizer/Score Calculator設計。
   - 既存 `enterprises` APIの更新方針。
   - test方針。
@@ -243,6 +307,7 @@ symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,d
 
 1. J-Quants無料範囲でどの指標が取れるか。
 2. 手動CSV補完で許容する項目と出典。
-3. BFFスコア計算式の閾値。
-4. 金融業のFCF N/A換算ルール。
-5. 20銘柄固定をいつ拡張するか。
+3. 実データCSVを置くprivate localディレクトリ名と運用手順。
+4. BFFスコア計算式の閾値。
+5. 金融業のFCF N/A換算ルール。
+6. 20銘柄固定をいつ拡張するか。
