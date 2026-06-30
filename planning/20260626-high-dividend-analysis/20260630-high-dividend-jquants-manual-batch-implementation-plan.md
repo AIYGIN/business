@@ -60,11 +60,13 @@ BFF側に、任意タイミングで起動できる手動batchを追加する。
 
 ```bash
 pnpm dividend-analysis:fetch --symbols 8058,9432,8306 --as-of 2026-06-30
+pnpm dividend-analysis:generate-csv --symbols 8058,9432,8306 --out data/dividend-analysis/private/manual-supplement.csv
 pnpm dividend-analysis:import-csv --file data/dividend-analysis/private/manual-supplement.csv
 pnpm dividend-analysis:recalculate --score-version dividend-score-v1
+pnpm dividend-analysis:fetch-high-dividend-candidates --source yahoo-finance --limit 50 --out data/dividend-analysis/private/candidates-yahoo-high-dividend.csv
 ```
 
-実装時にコマンド名はBFFの既存規約へ合わせる。
+実装時にコマンド名はBFFの既存規約へ合わせる。`generate-csv` はローカルで実行し、API取得結果から埋められる列を自動入力し、APIで取れない列を空欄または `notAvailableReason` 付きで出力する。人間はそのCSVを補完して `import-csv` に渡す。
 
 ### 4.2 Raw Data保存
 
@@ -148,7 +150,7 @@ FEは以下に限定する。
 
 ## 6. データ取得スパイク
 
-最初に20銘柄で以下を確認する。
+まず固定20銘柄で以下を確認し、その後同じ取得・補完フローを高配当上位50候補にも適用できるか確認する。
 
 | 確認項目 | 判定 |
 |---|---|
@@ -159,12 +161,54 @@ FEは以下に限定する。
 | 10年減配履歴・増配率に必要な履歴が無料範囲で足りるか | 不足想定。CSV補完候補 |
 | 金融業のFCF N/A処理に必要な業種判定ができるか | 可否確認 |
 
+### 6.1 BFF現状mockをどこまでJ-Quants APIで補填できるか
+
+BFFの現状mock/API DTOが必要としている主な項目は以下。実装前スパイクでは、各項目を「J-Quants無料範囲で自動取得」「J-Quants無料範囲から計算」「手動CSV補完」「対象外/要確認」に分類する。
+
+| BFF項目 | 現状mock/APIでの使い道 | J-Quants無料範囲での見込み | 補完方針 |
+|---|---|---|---|
+| `symbolId` | 銘柄コード | 上場銘柄一覧で取得できる見込み | API優先 |
+| `companyName` | 企業名表示 | 上場銘柄一覧で取得できる見込み | API優先 |
+| `sector` | 業種表示、金融業判定 | 上場銘柄一覧で取得できる見込み | API優先。不足時CSV |
+| `latestDividendYield` | 一覧の直近利回り、利回りスコア | 株価と配当関連値が揃えば計算可能。ただし無料範囲の遅延・配当項目不足に注意 | APIで計算できない場合CSV |
+| `payoutRatio` | 配当性向スコア | 財務サマリーで近い値が取れるかスパイク対象 | 取れない場合CSV |
+| `per` / `pbr` / `roe` | 財務指標スコア | 財務サマリーまたは株価/財務値から取得・計算できるかスパイク対象 | 取れない場合CSV |
+| `fcf` | FCFスコア | 無料範囲では営業CF・投資CFが不足する可能性が高い | 基本CSV補完。Premium/EDINETは後続検討 |
+| `dividendGrowthRate10y` | 10年増配率スコア | 無料範囲では10年履歴が不足する可能性が高い | 基本CSV補完 |
+| `dividendCutCount10y` | 10年減配履歴スコア | 無料範囲では10年履歴が不足する可能性が高い | 基本CSV補完 |
+| `totalScore` / `judgement` / `safetyLabel` | BFF計算済み分析結果 | APIから取得しない | BFFで計算 |
+| `scoreBreakdown.*` | スコア内訳、得点理由 | APIから取得しない | BFFで計算 |
+| `dataSources` / `dataAsOfDate` / `updatedAt` | 出典・基準日・更新日時 | API取得日時とCSV出典から構成 | BFFで構成 |
+
+原則は「APIで取れないものは全部CSV補完」でよい。ただし何が取れないかは実APIスパイクで確定する。したがって、BFF Issueでは最初のタスクを「BFF現状mock項目のJ-Quants無料範囲補填マトリックス作成」とする。
+
+### 6.2 対象銘柄リストの取得方針
+
+対象銘柄は以下を同時並行で扱えるようにする。
+
+1. 固定20銘柄リスト
+   - 既存PoCの比較・画面確認用。
+   - スコア計算・UI・CSV補完の安定した検証対象にする。
+2. 高配当上位候補リスト
+   - Yahoo!ファイナンスの高配当利回りスクリーニング（例: `https://finance.yahoo.co.jp/stocks/screening/highdividend?sort=-dividendYield`）などから上位50社候補を取得できる仕組みを検討する。
+   - これは分析データ本体ではなく、対象銘柄候補の取得元として扱う。
+   - 自動スクレイピング可否・利用条件は要確認。PoCではまずローカル手動コマンド、または人間が取得した候補CSVのimportから始める。
+
+候補リスト取得コマンド例:
+
+```bash
+pnpm dividend-analysis:fetch-high-dividend-candidates --source yahoo-finance --limit 50 --out data/dividend-analysis/private/candidates-yahoo-high-dividend.csv
+pnpm dividend-analysis:import-candidates --file data/dividend-analysis/private/candidates-yahoo-high-dividend.csv
+```
+
+BFFは固定20銘柄と候補上位50銘柄を入力セットとして扱い、J-Quants無料範囲で取れる項目を取得し、不足項目をCSV補完対象にする。
+
 ## 7. 手動CSV補完方針
 
 CSVには最低限以下を持たせる。
 
 ```csv
-symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,dividendCutCount10y,latestDividendYield,per,pbr,roe,sourceName,sourceUrl,note
+symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,dividendCutCount10y,latestDividendYield,per,pbr,roe,sourceName,sourceUrl,sourceType,notAvailableReason,note
 ```
 
 注意:
@@ -172,6 +216,8 @@ symbolId,companyName,sector,dataAsOfDate,fcf,payoutRatio,dividendGrowthRate10y,d
 - CSV値にも出典名と基準日を持たせる。
 - 転記ミスを前提に、BFF import時に型・範囲・必須項目を検証する。
 - 手動CSV由来の項目はFEで出典表示できるようにする。
+- ローカルコマンドでAPI取得済み項目を埋めたCSVを生成し、人間が空欄・不足列を補完できる形にする。
+- APIで取れない項目は全部CSV補完対象にする。補完対象はスパイク結果で確定し、CSV schemaに反映する。
 
 ### 7.1 CSV配置方式の議論と採用案
 
@@ -236,10 +282,14 @@ BFF repoに置かないもの:
 ### BFF
 
 - [ ] 手動batchでJ-Quants API無料範囲の実データを取得できる。
+- [ ] BFF現状mock項目について、J-Quants無料範囲で補填できる項目とCSV補完が必要な項目のマトリックスを作成する。
+- [ ] ローカルコマンドでAPI取得済み項目を埋めたCSVを生成できる。
 - [ ] 手動CSVをimportできる。
 - [ ] 実データCSVとJ-Quants由来Raw JSONはgitignore/private localに置き、Git管理しない。
-- [ ] BFF repoにはCSVテンプレート、schema、import/fetch/recalculateコマンド、fixtureだけを置く。
+- [ ] BFF repoにはCSVテンプレート、schema、import/fetch/recalculate/generate-csvコマンド、fixtureだけを置く。
 - [ ] Raw Dataに取得元、基準日、取得日時が保存される。
+- [ ] 固定20銘柄と高配当上位50候補の両方を入力セットとして扱える。
+- [ ] Yahoo!ファイナンス等の高配当候補取得は、利用条件確認後にローカル手動コマンドまたは候補CSV importとして扱う。
 - [ ] BFFがRaw/CSVからNormalized Dataを生成する。
 - [ ] BFFがスコア計算を行う。
 - [ ] 金融業のFCF N/Aと100点換算ルールがテストされている。
@@ -262,6 +312,7 @@ BFF repoに置かないもの:
 |---|---|---|
 | J-Quants規約 | 本人の私的利用を超えると制限に触れる可能性 | v1は本人PoC限定。第三者共有・公開・商用化は別途再設計 |
 | 公開CSV配置 | 無料公開サーバー/S3的な場所にCSVを置くと第三者が使用できる状態に近づく | 採用しない。実データCSVはBFF repoのgitignore/private localに置く |
+| 高配当候補リスト取得 | Yahoo!ファイナンス等から上位50社を取る場合、利用条件や取得方法の確認が必要 | 分析データ本体ではなく候補銘柄リストとして扱う。まずローカル手動コマンドまたは候補CSV importで開始する |
 | 無料範囲の不足 | 配当金情報、BS/PL/CF詳細、10年履歴が足りない可能性 | まず無料範囲でSpikeし、不足は手動CSV補完 |
 | 転記ミス | CSV補完で誤入力が入り得る | import時バリデーション、出典・基準日管理、レビュー欄 |
 | スコア定義の揺れ | 計算式変更で過去スコアと混同する | `scoreVersion` を必須にする |
@@ -283,8 +334,12 @@ BFF repoに置かないもの:
   - 手動batch設計。
   - Raw Data保存設計。
   - 実データCSVをgitignore/private localに置く方針。
+  - J-Quants無料範囲でBFF現状mockをどこまで補填できるかのスパイク設計。
+  - APIで取れない項目を全部CSV補完対象にする設計。
+  - ローカルコマンドでCSV生成する設計。
   - CSV template/schema/import設計。
   - Normalizer/Score Calculator設計。
+  - 固定20銘柄と高配当上位50候補リストを同時並行で扱う方針。
   - 既存 `enterprises` APIの更新方針。
   - test方針。
 
@@ -303,11 +358,25 @@ BFF repoに置かないもの:
   - 非リアルタイム表示。
   - Story/test方針。
 
-## 12. 次に人間が見るべきポイント
+## 12. 人間コメント反映後の確定事項と残確認
 
-1. J-Quants無料範囲でどの指標が取れるか。
-2. 手動CSV補完で許容する項目と出典。
-3. 実データCSVを置くprivate localディレクトリ名と運用手順。
-4. BFFスコア計算式の閾値。
-5. 金融業のFCF N/A換算ルール。
-6. 20銘柄固定をいつ拡張するか。
+### 確定事項
+
+1. J-Quants APIでの実現可能性を確認する。
+   - BFFの現状mock項目を、J-Quants無料範囲でどこまで補填できるかを見る。
+   - 実装前スパイクの成果物は「APIで取れる項目 / 計算できる項目 / CSV補完が必要な項目」のマトリックスにする。
+2. 手動CSV補完は、基本的にAPIで取れないもの全部を対象にする。
+   - 何が取れないかは現時点で断定せず、スパイクで判定する。
+3. 実データCSVはローカルコマンドで生成するイメージにする。
+   - APIで埋められる列を自動入力し、足りない列を人間が補完する。
+4. BFFスコア計算式の閾値は既存方針から変更しない。
+5. 金融業のFCF N/A換算ルールは既存方針から変更しない。
+6. 対象銘柄は、固定20銘柄と高配当上位50候補を同時並行で扱えるようにする。
+   - 高配当上位50候補は、Yahoo!ファイナンス高配当利回りスクリーニング等から取得する仕組みを検討する。
+   - ただし取得方法と利用条件は要確認であり、まずローカル手動コマンドまたは候補CSV importで扱う。
+
+### 残確認
+
+- J-Quants無料範囲で実際に取れる項目。
+- Yahoo!ファイナンス等の高配当候補リスト取得を自動化してよいか、または人間がCSVで渡す運用にするか。
+- private localディレクトリ名とCSV生成/import手順の最終命名。
